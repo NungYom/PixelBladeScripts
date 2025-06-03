@@ -41,17 +41,18 @@ local function log(msg)
 end
 
 local function fireOnHit(targetModel)
-    if not targetModel then return end
-    local hum = targetModel:FindFirstChild("Humanoid")
-    if not hum then return end
     if not onHit then
         log("❗ onHit remote not found!")
         return
     end
+    if not targetModel then return end
 
-    local dummy = Instance.new("Humanoid") -- หลอกว่าโดนโจมตี
-    onHit:FireServer(dummy, 16, {}, 0)
-    log("🔥 Fired onHit at " .. tostring(targetModel.Name))
+    local hum = targetModel:FindFirstChild("Humanoid")
+    if not hum or hum.Health <= 0 then return end
+
+    -- ส่ง target จริงให้ onHit (บางเกมใช้ตัว model หรือ Humanoid)
+    onHit:FireServer(targetModel, 16, {}, 0)
+    log("🔥 Fired onHit at: " .. targetModel.Name)
 end
 
 local function getTargets(radius)
@@ -85,18 +86,23 @@ local function attack()
         return
     end
 
-    newEffect:FireServer("PositionalSound", {
-        position = HumanoidRootPart.Position,
-        soundName = "SwordSwoosh",
-        positionMoveWith = HumanoidRootPart
-    })
-    newEffect:FireServer("Slash", {
-        wpn = crusher,
-        waitTime = 0.1
-    })
-    swing:FireServer()
+    if newEffect then
+        newEffect:FireServer("PositionalSound", {
+            position = HumanoidRootPart.Position,
+            soundName = "SwordSwoosh",
+            positionMoveWith = HumanoidRootPart
+        })
+        newEffect:FireServer("Slash", {
+            wpn = crusher,
+            waitTime = 0.1
+        })
+    end
 
-    log("🗡️ Fired all attack effects")
+    if swing then
+        swing:FireServer()
+    end
+
+    log("🗡️ Attack triggered")
 end
 
 -- 🟢 Toggle

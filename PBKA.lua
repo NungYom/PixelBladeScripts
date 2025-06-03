@@ -1,5 +1,7 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
@@ -30,35 +32,22 @@ toggleButton.MouseButton1Click:Connect(function()
 	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
 end)
 
--- โฟลเดอร์ใน GoblinArena ที่ต้องกรอง
-local goblinArenaFolder = workspace:FindFirstChild("GoblinArena")
-local excludeFolders = {}
+-- ฟังก์ชันกรอง NPC ประกอบฉาก
+local function isDecorativeNPC(npc)
+	if not npc:IsA("Model") then return false end
 
-if goblinArenaFolder then
-	excludeFolders = {
-		goblinArenaFolder:FindFirstChild("DrumGoblins"),
-		goblinArenaFolder:FindFirstChild("Goblins"),
-		goblinArenaFolder:FindFirstChild("introPositions")
-	}
-end
-
--- ฟังก์ชันตรวจสอบว่า NPC อยู่ในโฟลเดอร์ที่ต้องกรองหรือไม่
-local function isInExcludedFolder(npc)
-	for _, folder in ipairs(excludeFolders) do
-		if folder and npc:IsDescendantOf(folder) then
+	-- ตรวจโฟลเดอร์ต้นทางชื่อ "GoblinType1" หรือ "GoblinType2" ซึ่งมาจาก screenshot
+	local parent = npc.Parent
+	while parent do
+		if parent.Name == "GoblinType1" or parent.Name == "GoblinType2" then
 			return true
 		end
+		parent = parent.Parent
 	end
 	return false
 end
 
--- รายชื่อ NPC ที่ไม่ต้องไล่ตาม (เช่นตัวประกอบฉาก)
-local excludedNames = {
-	["GoblinType1"] = true,
-	["GoblinType2"] = true
-}
-
--- ฟังก์ชันหา mob ที่ใกล้ที่สุด
+-- หา Mob ที่ใกล้ที่สุด (ไม่นับ NPC ประกอบฉาก)
 local function getNearestMob()
 	local nearestMob = nil
 	local shortestDistance = math.huge
@@ -69,8 +58,7 @@ local function getNearestMob()
 			and npc:FindFirstChild("Humanoid")
 			and npc:FindFirstChild("HumanoidRootPart")
 			and npc.Humanoid.Health > 0
-			and not excludedNames[npc.Name]
-			and not isInExcludedFolder(npc) then
+			and not isDecorativeNPC(npc) then
 
 			local dist = (HumanoidRootPart.Position - npc.HumanoidRootPart.Position).Magnitude
 			if dist < scanRadius and dist < shortestDistance then
@@ -101,12 +89,8 @@ local function getNearestTouchPart()
 	return nearestPart
 end
 
--- Tween ไปหา
-local currentTween
-
+-- Tween ไปหาเป้าหมาย
 local function walkTo(targetCFrame)
-	if currentTween then currentTween:Cancel() end
-
 	local distance = (HumanoidRootPart.Position - targetCFrame.Position).Magnitude
 	local travelTime = distance / moveSpeed
 
@@ -114,11 +98,36 @@ local function walkTo(targetCFrame)
 	local tween = TweenService:Create(HumanoidRootPart, tweenInfo, {
 		CFrame = targetCFrame * CFrame.new(0, 0, -3)
 	})
-	currentTween = tween
 	tween:Play()
 end
 
--- ลูป
+-- ฟังก์ชันใช้สกิล tornado
+local function useTornadoSkill()
+	local mob = getNearestMob()
+	if not mob then return end
+
+	local newEffect = ReplicatedStorage:WaitForChild("remotes"):WaitForChild("newEffect")
+	local useAbility = ReplicatedStorage:WaitForChild("remotes"):WaitForChild("useAbility")
+
+	-- เอฟเฟกต์เสียง tornado (อาจไม่จำเป็น แต่มีใน remoteSpy)
+	newEffect:FireServer("PositionalSound", {
+		position = HumanoidRootPart.Position,
+		soundName = "ability_tornado",
+		positionMoveWith = HumanoidRootPart
+	})
+
+	-- เอฟเฟกต์ภาพ tornado
+	newEffect:FireServer("tornadoWoosh", {
+		char = Character,
+		dur = 2,
+		closestEnemy = mob
+	})
+
+	-- ใช้สกิล tornado จริง
+	useAbility:FireServer({"tornado"})
+end
+
+-- ลูปเดินอัตโนมัติ
 task.spawn(function()
 	while true do
 		if autoMoveEnabled then
@@ -133,5 +142,15 @@ task.spawn(function()
 			end
 		end
 		task.wait(updateInterval)
+	end
+end)
+
+-- ลูปใช้สกิล tornado ทุก 1 วิ
+task.spawn(function()
+	while true do
+		if autoMoveEnabled then
+			useTornadoSkill()
+		end
+		task.wait(1)
 	end
 end)

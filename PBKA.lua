@@ -5,6 +5,12 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
+-- Remotes
+local remotes = ReplicatedStorage:WaitForChild("remotes")
+local swing = remotes:FindFirstChild("swing")
+local newEffect = remotes:FindFirstChild("newEffect")
+local onHit = remotes:FindFirstChild("onHit")
+
 -- GUI ที่แสดงผล
 local gui = Instance.new("ScreenGui", PlayerGui)
 gui.Name = "KillAuraGui"
@@ -20,12 +26,14 @@ button.TextSize = 22
 button.Text = "Kill Aura: OFF"
 button.Parent = gui
 
-local onHit = remotes:FindFirstChild("onHit")
-
 local function fireOnHit(targetModel)
     if not targetModel then return end
     local hum = targetModel:FindFirstChild("Humanoid")
     if not hum then return end
+    if not onHit then
+        warn("onHit remote not found!")
+        return
+    end
     -- จำลอง hit
     local dummy = Instance.new("Humanoid") -- หลอก server ว่าโดนโจมตี
     onHit:FireServer(dummy, 16, {}, 0)
@@ -79,11 +87,6 @@ local function getTargets(radius)
     return targets
 end
 
--- Remotes
-local remotes = ReplicatedStorage:WaitForChild("remotes")
-local swing = remotes:FindFirstChild("swing")
-local newEffect = remotes:FindFirstChild("newEffect")
-
 -- โจมตี 1 ครั้ง
 local function attack()
     local crusher = Character:FindFirstChild("Crusher")
@@ -121,7 +124,7 @@ task.spawn(function()
                 log("🎯 Targets found: " .. #targets)
                 attack()
 
-                -- ✅ เรียก fireOnHit ที่นี่
+                -- เรียก fireOnHit กับเป้าหมายแต่ละตัว
                 for _, target in pairs(targets) do
                     fireOnHit(target)
                 end

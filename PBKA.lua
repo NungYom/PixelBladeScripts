@@ -5,17 +5,16 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
--- Remotes
+-- 🔗 Remotes
 local remotes = ReplicatedStorage:WaitForChild("remotes")
 local swing = remotes:FindFirstChild("swing")
 local newEffect = remotes:FindFirstChild("newEffect")
 local onHit = remotes:FindFirstChild("onHit")
 
--- GUI ที่แสดงผล
+-- 🖼️ GUI
 local gui = Instance.new("ScreenGui", PlayerGui)
 gui.Name = "KillAuraGui"
 
--- ปุ่มเปิดปิด Kill Aura
 local button = Instance.new("TextButton")
 button.Size = UDim2.new(0, 250, 0, 60)
 button.Position = UDim2.new(0, 30, 0, 30)
@@ -26,20 +25,6 @@ button.TextSize = 22
 button.Text = "Kill Aura: OFF"
 button.Parent = gui
 
-local function fireOnHit(targetModel)
-    if not targetModel then return end
-    local hum = targetModel:FindFirstChild("Humanoid")
-    if not hum then return end
-    if not onHit then
-        warn("onHit remote not found!")
-        return
-    end
-    -- จำลอง hit
-    local dummy = Instance.new("Humanoid") -- หลอก server ว่าโดนโจมตี
-    onHit:FireServer(dummy, 16, {}, 0)
-end
-
--- แสดง Log / Debug
 local logLabel = Instance.new("TextLabel")
 logLabel.Size = UDim2.new(0, 500, 0, 100)
 logLabel.Position = UDim2.new(0, 30, 0, 100)
@@ -55,14 +40,20 @@ local function log(msg)
     logLabel.Text = logLabel.Text .. tostring(msg) .. "\n"
 end
 
-local auraOn = false
-button.MouseButton1Click:Connect(function()
-    auraOn = not auraOn
-    button.Text = "Kill Aura: " .. (auraOn and "ON" or "OFF")
-    log("Aura Toggled: " .. tostring(auraOn))
-end)
+local function fireOnHit(targetModel)
+    if not targetModel then return end
+    local hum = targetModel:FindFirstChild("Humanoid")
+    if not hum then return end
+    if not onHit then
+        log("❗ onHit remote not found!")
+        return
+    end
 
--- หาเป้าหมายในระยะ 100 studs
+    local dummy = Instance.new("Humanoid") -- หลอกว่าโดนโจมตี
+    onHit:FireServer(dummy, 16, {}, 0)
+    log("🔥 Fired onHit at " .. tostring(targetModel.Name))
+end
+
 local function getTargets(radius)
     local targets = {}
 
@@ -87,7 +78,6 @@ local function getTargets(radius)
     return targets
 end
 
--- โจมตี 1 ครั้ง
 local function attack()
     local crusher = Character:FindFirstChild("Crusher")
     if not crusher then
@@ -95,27 +85,29 @@ local function attack()
         return
     end
 
-    -- Fire PositionalSound
     newEffect:FireServer("PositionalSound", {
         position = HumanoidRootPart.Position,
         soundName = "SwordSwoosh",
         positionMoveWith = HumanoidRootPart
     })
-    log("🎵 Fired: PositionalSound")
-
-    -- Fire Slash
     newEffect:FireServer("Slash", {
         wpn = crusher,
         waitTime = 0.1
     })
-    log("💥 Fired: Slash Effect")
-
-    -- Fire Swing
     swing:FireServer()
-    log("🗡️ Fired: swing")
+
+    log("🗡️ Fired all attack effects")
 end
 
--- ลูป Kill Aura
+-- 🟢 Toggle
+local auraOn = false
+button.MouseButton1Click:Connect(function()
+    auraOn = not auraOn
+    button.Text = "Kill Aura: " .. (auraOn and "ON" or "OFF")
+    log("Aura Toggled: " .. tostring(auraOn))
+end)
+
+-- 🔄 Loop
 task.spawn(function()
     while true do
         if auraOn then
@@ -123,8 +115,6 @@ task.spawn(function()
             if #targets > 0 then
                 log("🎯 Targets found: " .. #targets)
                 attack()
-
-                -- เรียก fireOnHit กับเป้าหมายแต่ละตัว
                 for _, target in pairs(targets) do
                     fireOnHit(target)
                 end

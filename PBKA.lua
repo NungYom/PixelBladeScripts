@@ -1,19 +1,17 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local rs = ReplicatedStorage:WaitForChild("remotes")
-
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
+-- ตั้งค่า
 local moveSpeed = 100
 local scanRadius = 1500
-local attackRange = 5
 local updateInterval = 0.75
 local autoMoveEnabled = false
 
+-- GUI
 local gui = Instance.new("ScreenGui", PlayerGui)
 gui.Name = "AutoMoveGUI"
 
@@ -32,7 +30,7 @@ toggleButton.MouseButton1Click:Connect(function()
 	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
 end)
 
--- กรองโฟลเดอร์
+-- โฟลเดอร์ใน GoblinArena ที่ต้องกรอง
 local goblinArenaFolder = workspace:FindFirstChild("GoblinArena")
 local excludeFolders = {}
 
@@ -44,6 +42,7 @@ if goblinArenaFolder then
 	}
 end
 
+-- ฟังก์ชันตรวจสอบว่า NPC อยู่ในโฟลเดอร์ที่ต้องกรองหรือไม่
 local function isInExcludedFolder(npc)
 	for _, folder in ipairs(excludeFolders) do
 		if folder and npc:IsDescendantOf(folder) then
@@ -53,11 +52,13 @@ local function isInExcludedFolder(npc)
 	return false
 end
 
+-- รายชื่อ NPC ที่ไม่ต้องไล่ตาม (เช่นตัวประกอบฉาก)
 local excludedNames = {
 	["GoblinType1"] = true,
 	["GoblinType2"] = true
 }
 
+-- ฟังก์ชันหา mob ที่ใกล้ที่สุด
 local function getNearestMob()
 	local nearestMob = nil
 	local shortestDistance = math.huge
@@ -82,6 +83,7 @@ local function getNearestMob()
 	return nearestMob
 end
 
+-- หา Part ชื่อ "touch"
 local function getNearestTouchPart()
 	local nearestPart = nil
 	local shortestDistance = math.huge
@@ -99,6 +101,7 @@ local function getNearestTouchPart()
 	return nearestPart
 end
 
+-- Tween ไปหา
 local currentTween
 
 local function walkTo(targetCFrame)
@@ -115,64 +118,13 @@ local function walkTo(targetCFrame)
 	tween:Play()
 end
 
--- ฟังก์ชันโจมตีเป้าหมาย
-local function attackTarget(target)
-	local weapon = Character:FindFirstChild("SteelSword")
-	local humanoid = target:FindFirstChild("Humanoid")
-	local targetRoot = target:FindFirstChild("HumanoidRootPart")
-
-	if not (weapon and humanoid and targetRoot) then return end
-
-	-- Swing เริ่ม
-	rs.swing:FireServer()
-
-	rs.newEffect:FireServer("Slash", {
-		wpn = weapon,
-		waitTime = 0.283
-	})
-
-	rs.newEffect:FireServer("PositionalSound", {
-		position = HumanoidRootPart.Position,
-		soundName = "SwordSwoosh",
-		positionMoveWith = HumanoidRootPart
-	})
-
-	task.wait(0.05)
-
-	rs.newEffect:FireServer("PositionalSound", {
-		position = targetRoot.Position,
-		soundName = "BladeHit",
-		positionMoveWith = targetRoot
-	})
-
-	rs.newEffect:FireServer("hitFeedback", {
-		hitPos = targetRoot.Position,
-		dur = 0.25,
-		enemy = target
-	})
-
-	-- แรงโจมตีสูง (9999)
-	rs.onHit:FireServer(humanoid, 9999, {}, 0)
-end
-
 -- ลูป
 task.spawn(function()
 	while true do
 		if autoMoveEnabled then
 			local mob = getNearestMob()
 			if mob then
-				local mobHRP = mob:FindFirstChild("HumanoidRootPart")
-				local mobHumanoid = mob:FindFirstChild("Humanoid")
-
-				if mobHRP and mobHumanoid and mobHumanoid.Health > 0 then
-					local dist = (HumanoidRootPart.Position - mobHRP.Position).Magnitude
-					if dist > attackRange then
-						walkTo(mobHRP.CFrame)
-					else
-						attackTarget(mob)
-						repeat task.wait(0.25) until mobHumanoid.Health <= 0 or not autoMoveEnabled
-					end
-				end
+				walkTo(mob:FindFirstChild("HumanoidRootPart").CFrame)
 			else
 				local touchPart = getNearestTouchPart()
 				if touchPart then

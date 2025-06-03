@@ -112,12 +112,6 @@ local function attack()
     log("🗡️ Fired: swing")
 end
 
-
-	-- โจมตีทุกเป้าหมาย
-for _, target in pairs(targets) do
-    fireOnHit(target)
-end
-	
 -- ลูป Kill Aura
 task.spawn(function()
     while true do
@@ -126,6 +120,11 @@ task.spawn(function()
             if #targets > 0 then
                 log("🎯 Targets found: " .. #targets)
                 attack()
+
+                -- ✅ เรียก fireOnHit ที่นี่
+                for _, target in pairs(targets) do
+                    fireOnHit(target)
+                end
             end
         end
         task.wait(0.3)

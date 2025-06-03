@@ -52,7 +52,13 @@ local function isInExcludedFolder(npc)
 	return false
 end
 
--- หา Mob ที่ใกล้ที่สุด (ไม่อยู่ในโฟลเดอร์ที่ต้องกรอง)
+-- รายชื่อ NPC ที่ไม่ต้องไล่ตาม (เช่นตัวประกอบฉาก)
+local excludedNames = {
+	["GoblinType1"] = true,
+	["GoblinType2"] = true
+}
+
+-- ฟังก์ชันหา mob ที่ใกล้ที่สุด
 local function getNearestMob()
 	local nearestMob = nil
 	local shortestDistance = math.huge
@@ -63,6 +69,7 @@ local function getNearestMob()
 			and npc:FindFirstChild("Humanoid")
 			and npc:FindFirstChild("HumanoidRootPart")
 			and npc.Humanoid.Health > 0
+			and not excludedNames[npc.Name]
 			and not isInExcludedFolder(npc) then
 
 			local dist = (HumanoidRootPart.Position - npc.HumanoidRootPart.Position).Magnitude

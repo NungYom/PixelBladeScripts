@@ -48,17 +48,32 @@ local function getNearestMob()
 	return nearestMob
 end
 
--- Tween ไปหาเป้าหมาย
-local function walkTo(target)
-	local targetHRP = target:FindFirstChild("HumanoidRootPart")
-	if not targetHRP then return end
+-- หา Part ชื่อ "touch" ที่ใกล้ที่สุด
+local function getNearestTouchPart()
+	local nearestPart = nil
+	local shortestDistance = math.huge
 
-	local distance = (HumanoidRootPart.Position - targetHRP.Position).Magnitude
+	for _, part in pairs(workspace:GetDescendants()) do
+		if part:IsA("BasePart") and part.Name:lower() == "touch" then
+			local dist = (HumanoidRootPart.Position - part.Position).Magnitude
+			if dist < scanRadius and dist < shortestDistance then
+				shortestDistance = dist
+				nearestPart = part
+			end
+		end
+	end
+
+	return nearestPart
+end
+
+-- Tween ไปหาเป้าหมาย
+local function walkTo(targetCFrame)
+	local distance = (HumanoidRootPart.Position - targetCFrame.Position).Magnitude
 	local travelTime = distance / moveSpeed
 
 	local tweenInfo = TweenInfo.new(travelTime, Enum.EasingStyle.Linear)
 	local tween = TweenService:Create(HumanoidRootPart, tweenInfo, {
-		CFrame = targetHRP.CFrame * CFrame.new(0, 0, -3)
+		CFrame = targetCFrame * CFrame.new(0, 0, -3)
 	})
 	tween:Play()
 end
@@ -69,7 +84,12 @@ task.spawn(function()
 		if autoMoveEnabled then
 			local mob = getNearestMob()
 			if mob then
-				walkTo(mob)
+				walkTo(mob:FindFirstChild("HumanoidRootPart").CFrame)
+			else
+				local touchPart = getNearestTouchPart()
+				if touchPart then
+					walkTo(touchPart.CFrame)
+				end
 			end
 		end
 		task.wait(updateInterval)

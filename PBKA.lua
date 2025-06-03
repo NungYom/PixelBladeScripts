@@ -20,6 +20,17 @@ button.TextSize = 22
 button.Text = "Kill Aura: OFF"
 button.Parent = gui
 
+local onHit = remotes:FindFirstChild("onHit")
+
+local function fireOnHit(targetModel)
+    if not targetModel then return end
+    local hum = targetModel:FindFirstChild("Humanoid")
+    if not hum then return end
+    -- จำลอง hit
+    local dummy = Instance.new("Humanoid") -- หลอก server ว่าโดนโจมตี
+    onHit:FireServer(dummy, 16, {}, 0)
+end
+
 -- แสดง Log / Debug
 local logLabel = Instance.new("TextLabel")
 logLabel.Size = UDim2.new(0, 500, 0, 100)
@@ -101,6 +112,12 @@ local function attack()
     log("🗡️ Fired: swing")
 end
 
+
+	-- โจมตีทุกเป้าหมาย
+for _, target in pairs(targets) do
+    fireOnHit(target)
+end
+	
 -- ลูป Kill Aura
 task.spawn(function()
     while true do

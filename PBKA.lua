@@ -6,12 +6,12 @@ local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
 -- ตั้งค่า
-local moveSpeed = 100 -- studs per second
-local scanRadius = 1500 -- ระยะค้นหา
-local updateInterval = 0.75 -- ความถี่การค้นหา
+local moveSpeed = 100
+local scanRadius = 1500
+local updateInterval = 0.75
 local autoMoveEnabled = false
 
--- GUI สั้น ๆ
+-- GUI
 local gui = Instance.new("ScreenGui", PlayerGui)
 gui.Name = "AutoMoveGUI"
 
@@ -30,13 +30,21 @@ toggleButton.MouseButton1Click:Connect(function()
 	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
 end)
 
--- หา Mob ที่ใกล้ที่สุด
+local goblinArenaFolder = workspace:FindFirstChild("GoblinArena")
+
+-- หา Mob ที่ใกล้ที่สุด (ไม่อยู่ใน GoblinArena)
 local function getNearestMob()
 	local nearestMob = nil
 	local shortestDistance = math.huge
 
 	for _, npc in pairs(workspace:GetDescendants()) do
-		if npc:IsA("Model") and npc:FindFirstChild("Humanoid") and npc:FindFirstChild("HumanoidRootPart") and npc ~= Character and npc.Humanoid.Health > 0 then
+		if npc:IsA("Model")
+			and npc ~= Character
+			and npc:FindFirstChild("Humanoid")
+			and npc:FindFirstChild("HumanoidRootPart")
+			and npc.Humanoid.Health > 0
+			and (not goblinArenaFolder or not npc:IsDescendantOf(goblinArenaFolder)) then
+
 			local dist = (HumanoidRootPart.Position - npc.HumanoidRootPart.Position).Magnitude
 			if dist < scanRadius and dist < shortestDistance then
 				shortestDistance = dist
@@ -48,7 +56,7 @@ local function getNearestMob()
 	return nearestMob
 end
 
--- หา Part ชื่อ "touch" ที่ใกล้ที่สุด
+-- หา Part ชื่อ "touch"
 local function getNearestTouchPart()
 	local nearestPart = nil
 	local shortestDistance = math.huge
@@ -66,7 +74,7 @@ local function getNearestTouchPart()
 	return nearestPart
 end
 
--- Tween ไปหาเป้าหมาย
+-- Tween ไปหา
 local function walkTo(targetCFrame)
 	local distance = (HumanoidRootPart.Position - targetCFrame.Position).Magnitude
 	local travelTime = distance / moveSpeed
@@ -78,7 +86,7 @@ local function walkTo(targetCFrame)
 	tween:Play()
 end
 
--- ลูปการทำงาน
+-- ลูป
 task.spawn(function()
 	while true do
 		if autoMoveEnabled then

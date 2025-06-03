@@ -30,9 +30,29 @@ toggleButton.MouseButton1Click:Connect(function()
 	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
 end)
 
+-- โฟลเดอร์ใน GoblinArena ที่ต้องกรอง
 local goblinArenaFolder = workspace:FindFirstChild("GoblinArena")
+local excludeFolders = {}
 
--- หา Mob ที่ใกล้ที่สุด (ไม่อยู่ใน GoblinArena)
+if goblinArenaFolder then
+	excludeFolders = {
+		goblinArenaFolder:FindFirstChild("DrumGoblins"),
+		goblinArenaFolder:FindFirstChild("Goblins"),
+		goblinArenaFolder:FindFirstChild("introPositions")
+	}
+end
+
+-- ฟังก์ชันตรวจสอบว่า NPC อยู่ในโฟลเดอร์ที่ต้องกรองหรือไม่
+local function isInExcludedFolder(npc)
+	for _, folder in ipairs(excludeFolders) do
+		if folder and npc:IsDescendantOf(folder) then
+			return true
+		end
+	end
+	return false
+end
+
+-- หา Mob ที่ใกล้ที่สุด (ไม่อยู่ในโฟลเดอร์ที่ต้องกรอง)
 local function getNearestMob()
 	local nearestMob = nil
 	local shortestDistance = math.huge
@@ -43,7 +63,7 @@ local function getNearestMob()
 			and npc:FindFirstChild("Humanoid")
 			and npc:FindFirstChild("HumanoidRootPart")
 			and npc.Humanoid.Health > 0
-			and (not goblinArenaFolder or not npc:IsDescendantOf(goblinArenaFolder)) then
+			and not isInExcludedFolder(npc) then
 
 			local dist = (HumanoidRootPart.Position - npc.HumanoidRootPart.Position).Magnitude
 			if dist < scanRadius and dist < shortestDistance then
@@ -75,7 +95,11 @@ local function getNearestTouchPart()
 end
 
 -- Tween ไปหา
+local currentTween
+
 local function walkTo(targetCFrame)
+	if currentTween then currentTween:Cancel() end
+
 	local distance = (HumanoidRootPart.Position - targetCFrame.Position).Magnitude
 	local travelTime = distance / moveSpeed
 
@@ -83,6 +107,7 @@ local function walkTo(targetCFrame)
 	local tween = TweenService:Create(HumanoidRootPart, tweenInfo, {
 		CFrame = targetCFrame * CFrame.new(0, 0, -3)
 	})
+	currentTween = tween
 	tween:Play()
 end
 

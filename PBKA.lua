@@ -8,6 +8,7 @@ local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 -- ตั้งค่า
 local moveSpeed = 100
 local scanRadius = 1500
+local combatRange = 200
 local updateInterval = 0.75
 local autoMoveEnabled = false
 
@@ -52,14 +53,14 @@ local function isInExcludedFolder(npc)
 	return false
 end
 
--- รายชื่อ NPC ที่ไม่ต้องไล่ตาม (เช่นตัวประกอบฉาก)
+-- รายชื่อ NPC ที่ไม่ต้องไล่ตาม
 local excludedNames = {
 	["GoblinType1"] = true,
 	["GoblinType2"] = true
 }
 
--- ฟังก์ชันหา mob ที่ใกล้ที่สุด
-local function getNearestMob()
+-- ฟังก์ชันหา mob ที่ใกล้ที่สุดภายในระยะที่กำหนด
+local function getNearestMobInRange(maxDistance)
 	local nearestMob = nil
 	local shortestDistance = math.huge
 
@@ -73,7 +74,7 @@ local function getNearestMob()
 			and not isInExcludedFolder(npc) then
 
 			local dist = (HumanoidRootPart.Position - npc.HumanoidRootPart.Position).Magnitude
-			if dist < scanRadius and dist < shortestDistance then
+			if dist < maxDistance and dist < shortestDistance then
 				shortestDistance = dist
 				nearestMob = npc
 			end
@@ -83,15 +84,19 @@ local function getNearestMob()
 	return nearestMob
 end
 
--- แตะ touch เฉพาะอันที่ยังไม่เคย
+-- จำแคมป์ไฟที่เคยสัมผัสแล้ว
 local touchedParts = {}
 
+-- หา touch part ที่ยังไม่เคยไป
 local function getNearestUntouchedTouchPart()
 	local nearestPart = nil
 	local shortestDistance = math.huge
 
 	for _, part in pairs(workspace:GetDescendants()) do
-		if part:IsA("BasePart") and part.Name:lower() == "touch" and not touchedParts[part] then
+		if part:IsA("BasePart")
+			and part.Name:lower() == "touch"
+			and not touchedParts[part] then
+
 			local dist = (HumanoidRootPart.Position - part.Position).Magnitude
 			if dist < scanRadius and dist < shortestDistance then
 				shortestDistance = dist
@@ -124,16 +129,16 @@ end
 task.spawn(function()
 	while true do
 		if autoMoveEnabled then
-			local touchPart = getNearestUntouchedTouchPart()
-			if touchPart then
-				touchedParts[touchPart] = true
-				walkTo(touchPart.CFrame)
-				task.wait(1.5) -- พัก heal ที่แคมป์
-			end
-
-			local mob = getNearestMob()
+			local mob = getNearestMobInRange(combatRange)
 			if mob then
-				walkTo(mob:FindFirstChild("HumanoidRootPart").CFrame)
+				walkTo(mob.HumanoidRootPart.CFrame)
+			else
+				local touchPart = getNearestUntouchedTouchPart()
+				if touchPart then
+					touchedParts[touchPart] = true
+					walkTo(touchPart.CFrame)
+					task.wait(1.5)
+				end
 			end
 		end
 		task.wait(updateInterval)

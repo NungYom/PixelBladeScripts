@@ -1,17 +1,21 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
--- ตั้งค่า
+-- === CONFIG ===
 local moveSpeed = 100
 local scanRadius = 1500
 local updateInterval = 0.75
 local autoMoveEnabled = false
 
--- GUI
+local lobbyPlaceId = 18172550962
+
+-- === GUI ===
 local gui = Instance.new("ScreenGui", PlayerGui)
 gui.Name = "AutoMoveGUI"
 
@@ -30,7 +34,23 @@ toggleButton.MouseButton1Click:Connect(function()
 	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
 end)
 
--- โฟลเดอร์ใน GoblinArena ที่ต้องกรอง
+-- === ฟังก์ชันเฉพาะ Lobby ===
+local function lobbyCode()
+	local args = {
+		"Grasslands",
+		"Heroic",
+		true
+	}
+
+	local tpRemote = ReplicatedStorage:WaitForChild("remotes"):WaitForChild("playerTP")
+	tpRemote:FireServer(unpack(args))
+
+	-- ปิด AutoMove ทันทีหลังส่งคำสั่ง (ถ้าต้องการ)
+	autoMoveEnabled = false
+	toggleButton.Text = "AutoMove: OFF"
+end
+
+-- === ฟังก์ชันสำหรับตีมอน ===
 local goblinArenaFolder = workspace:FindFirstChild("GoblinArena")
 local excludeFolders = {}
 
@@ -42,7 +62,11 @@ if goblinArenaFolder then
 	}
 end
 
--- ฟังก์ชันตรวจสอบว่า NPC อยู่ในโฟลเดอร์ที่ต้องกรองหรือไม่
+local excludedNames = {
+	["GoblinType1"] = true,
+	["GoblinType2"] = true
+}
+
 local function isInExcludedFolder(npc)
 	for _, folder in ipairs(excludeFolders) do
 		if folder and npc:IsDescendantOf(folder) then
@@ -52,16 +76,8 @@ local function isInExcludedFolder(npc)
 	return false
 end
 
--- รายชื่อ NPC ที่ไม่ต้องไล่ตาม (เช่นตัวประกอบฉาก)
-local excludedNames = {
-	["GoblinType1"] = true,
-	["GoblinType2"] = true
-}
-
--- ฟังก์ชันหา mob ที่ใกล้ที่สุด
 local function getNearestMob()
-	local nearestMob = nil
-	local shortestDistance = math.huge
+	local nearestMob, shortestDistance = nil, math.huge
 
 	for _, npc in pairs(workspace:GetDescendants()) do
 		if npc:IsA("Model")
@@ -83,10 +99,8 @@ local function getNearestMob()
 	return nearestMob
 end
 
--- หา Part ชื่อ "touch"
 local function getNearestTouchPart()
-	local nearestPart = nil
-	local shortestDistance = math.huge
+	local nearestPart, shortestDistance = nil, math.huge
 
 	for _, part in pairs(workspace:GetDescendants()) do
 		if part:IsA("BasePart") and part.Name:lower() == "touch" then
@@ -101,7 +115,6 @@ local function getNearestTouchPart()
 	return nearestPart
 end
 
--- Tween ไปหา
 local currentTween
 
 local function walkTo(targetCFrame)
@@ -118,20 +131,32 @@ local function walkTo(targetCFrame)
 	tween:Play()
 end
 
--- ลูป
+-- === ลูปหลัก ===
 task.spawn(function()
+	local doneLobbyCode = false
+
 	while true do
-		if autoMoveEnabled then
-			local mob = getNearestMob()
-			if mob then
-				walkTo(mob:FindFirstChild("HumanoidRootPart").CFrame)
-			else
-				local touchPart = getNearestTouchPart()
-				if touchPart then
-					walkTo(touchPart.CFrame)
+		if game.PlaceId == lobbyPlaceId then
+			if not doneLobbyCode then
+				doneLobbyCode = true
+				lobbyCode()
+			end
+		else
+			doneLobbyCode = false
+
+			if autoMoveEnabled then
+				local mob = getNearestMob()
+				if mob then
+					walkTo(mob:FindFirstChild("HumanoidRootPart").CFrame)
+				else
+					local touchPart = getNearestTouchPart()
+					if touchPart then
+						walkTo(touchPart.CFrame)
+					end
 				end
 			end
 		end
+
 		task.wait(updateInterval)
 	end
 end)

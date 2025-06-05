@@ -105,7 +105,7 @@ local function getNearestUntouchedTouchPart()
 			and not touchedParts[part] then
 
 			local dist = (HumanoidRootPart.Position - part.Position).Magnitude
-			if dist < scanRadius and dist < shortestDistance then
+			if dist < shortestDistance then
 				shortestDistance = dist
 				nearestPart = part
 			end
@@ -148,28 +148,29 @@ end
 task.spawn(function()
 	while true do
 		if autoMoveEnabled then
-			combatRange = baseCombatRange
-			local mob = nil
-
-			-- Try expanding range step-by-step
-			while not mob and combatRange <= scanRadius do
-				mob = getLowestHpMobInRange(combatRange)
-				if not mob then
-					combatRange += 100
-				end
-			end
-
-			if mob then
-				if mob ~= lastTarget then
-					lastTarget = mob
-					circleAroundTarget(mob)
-				end
+			-- Always check for touch part first
+			local touchPart = getNearestUntouchedTouchPart()
+			if touchPart then
+				touchedParts[touchPart] = true
+				walkTo(touchPart.CFrame)
+				task.wait(1.5)
 			else
-				local touchPart = getNearestUntouchedTouchPart()
-				if touchPart then
-					touchedParts[touchPart] = true
-					walkTo(touchPart.CFrame)
-					task.wait(1.5)
+				combatRange = baseCombatRange
+				local mob = nil
+
+				-- Try expanding range step-by-step
+				while not mob and combatRange <= scanRadius do
+					mob = getLowestHpMobInRange(combatRange)
+					if not mob then
+						combatRange += 100
+					end
+				end
+
+				if mob then
+					if mob ~= lastTarget then
+						lastTarget = mob
+						circleAroundTarget(mob)
+					end
 				end
 			end
 		end

@@ -73,6 +73,8 @@ end
 
 local function getAllNearbyTargets(maxDistance)
 	local targets = {}
+	local worldSpawn = workspace:FindFirstChild("SpawnLocation") or Instance.new("Part")
+	worldSpawn.Position = Vector3.new(0, 0, 0)
 
 	for _, npc in pairs(workspace:GetDescendants()) do
 		if npc:IsA("Model")
@@ -87,7 +89,7 @@ local function getAllNearbyTargets(maxDistance)
 			table.insert(targets, {
 				type = "mob",
 				object = npc,
-				distance = (HumanoidRootPart.Position - npc.HumanoidRootPart.Position).Magnitude
+				distance = (worldSpawn.Position - npc.HumanoidRootPart.Position).Magnitude
 			})
 		end
 	end
@@ -100,7 +102,7 @@ local function getAllNearbyTargets(maxDistance)
 			table.insert(targets, {
 				type = "touch",
 				object = part,
-				distance = (HumanoidRootPart.Position - part.Position).Magnitude
+				distance = (worldSpawn.Position - part.Position).Magnitude
 			})
 		end
 	end

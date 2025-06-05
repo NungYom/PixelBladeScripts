@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -36,26 +37,29 @@ toggleButton.MouseButton1Click:Connect(function()
 	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
 end)
 
--- Float
-local floatForce = Instance.new("BodyVelocity")
-floatForce.Velocity = Vector3.new(0, 0, 0)
-floatForce.MaxForce = Vector3.new(0, math.huge, 0)
-floatForce.Name = "FloatForce"
-floatForce.Parent = HumanoidRootPart
-
--- Noclip + Float handler
+-- Performance boost: minimize visuals
+Lighting.GlobalShadows = false
+Lighting.FogEnd = 1000000
+for _, v in ipairs(workspace:GetDescendants()) do
+	if v:IsA("BasePart") then
+		v.Material = Enum.Material.SmoothPlastic
+		v.CastShadow = false
+	end
+	if v:IsA("ParticleEmitter") or v:IsA("Trail") then
+		v.Enabled = false
+	end
+end
+-- Noclip & Floating (เพื่อไม่ให้กระตุกขึ้นลง)
 RunService.Stepped:Connect(function()
-	if autoMoveEnabled and Character and Humanoid then
+	if autoMoveEnabled and Character and Character:FindFirstChildOfClass("Humanoid") then
 		for _, part in pairs(Character:GetDescendants()) do
 			if part:IsA("BasePart") then
 				part.CanCollide = false
+				part.Anchored = false
 			end
 		end
-		Humanoid.PlatformStand = true
-		floatForce.Velocity = Vector3.new(0, 0, 0)
-	else
-		Humanoid.PlatformStand = false
-		floatForce.Velocity = Vector3.zero
+		Humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+		HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
 	end
 end)
 
@@ -84,14 +88,6 @@ local function isInExcludedFolder(npc)
 	return false
 end
 
-local function isOnGround(part)
-	local raycastParams = RaycastParams.new()
-	raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-	raycastParams.FilterDescendantsInstances = {part.Parent}
-	local ray = workspace:Raycast(part.Position, Vector3.new(0, -10, 0), raycastParams)
-	return ray ~= nil
-end
-
 local function getNearestMobInRange(maxDistance)
 	local nearestMob = nil
 	local shortestDistance = math.huge
@@ -103,8 +99,7 @@ local function getNearestMobInRange(maxDistance)
 			and npc:FindFirstChild("HumanoidRootPart")
 			and npc.Humanoid.Health > 0
 			and not excludedNames[npc.Name]
-			and not isInExcludedFolder(npc)
-			and isOnGround(npc.HumanoidRootPart) then
+			and not isInExcludedFolder(npc) then
 
 			local dist = (HumanoidRootPart.Position - npc.HumanoidRootPart.Position).Magnitude
 			if dist < maxDistance and dist < shortestDistance then
@@ -115,26 +110,6 @@ local function getNearestMobInRange(maxDistance)
 	end
 
 	return nearestMob
-end
-
-local function getNearestUntouchedTouchPart()
-	local nearestPart = nil
-	local shortestDistance = math.huge
-
-	for _, part in pairs(workspace:GetDescendants()) do
-		if part:IsA("BasePart")
-			and part.Name:lower() == "touch"
-			and not touchedParts[part] then
-
-			local dist = (HumanoidRootPart.Position - part.Position).Magnitude
-			if dist < scanRadius and dist < shortestDistance then
-				shortestDistance = dist
-				nearestPart = part
-			end
-		end
-	end
-
-	return nearestPart
 end
 
 local currentTween
@@ -151,20 +126,40 @@ local function walkTo(targetCFrame)
 	currentTween:Play()
 end
 
--- Move around target in a circle
+-- Smooth circle strafing
 local function circleAroundTarget(target)
 	task.spawn(function()
+		local angle = 0
 		while autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
-			local angle = tick() % 6.28
 			local radius = 4
+			angle += math.rad(2)
+			if angle > math.pi * 2 then angle = 0 end
 			local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
 			local goalPos = target.HumanoidRootPart.Position + offset
 			local goalCFrame = CFrame.new(goalPos, target.HumanoidRootPart.Position)
 			walkTo(goalCFrame)
-			task.wait(0.1)
+			task.wait(0.05)
 		end
 	end)
 end
+-- ปิดเอฟเฟกต์ทุกอย่างเพื่อเพิ่มประสิทธิภาพสูงสุด
+task.spawn(function()
+	while true do
+		for _, obj in pairs(workspace:GetDescendants()) do
+			if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") or obj:IsA("Smoke") then
+				obj.Enabled = false
+			elseif obj:IsA("Light") then
+				obj.Enabled = false
+			elseif obj:IsA("Decal") or obj:IsA("Texture") then
+				obj.Transparency = 1
+			end
+		end
+		-- ปิด Shadows และ Effects ที่ฝั่ง LocalPlayer
+		settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+		UserSettings():GetService("UserGameSettings").SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1
+		task.wait(2)
+	end
+end)
 
 -- Main loop
 task.spawn(function()
@@ -177,13 +172,6 @@ task.spawn(function()
 					local offsetCFrame = mob.HumanoidRootPart.CFrame * CFrame.new(0, 0, -4)
 					walkTo(offsetCFrame)
 					circleAroundTarget(mob)
-				end
-			else
-				local touchPart = getNearestUntouchedTouchPart()
-				if touchPart then
-					touchedParts[touchPart] = true
-					walkTo(touchPart.CFrame)
-					task.wait(1.5)
 				end
 			end
 		end

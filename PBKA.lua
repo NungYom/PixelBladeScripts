@@ -68,14 +68,80 @@ local function isOnGround(part)
 	return ray ~= nil
 end
 
+local function hasDescendantAI(npc)
+	for _, descendant in ipairs(npc:GetDescendants()) do
+		if descendant:IsA("Script") or descendant:IsA("ModuleScript") then
+			return true
+		end
+	end
+	return false
+end
+
+local function hasActiveAnimations(humanoid)
+	local animator = humanoid:FindFirstChildOfClass("Animator")
+	if animator then
+		for _, animTrack in ipairs(animator:GetPlayingAnimationTracks()) do
+			if animTrack.IsPlaying then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+local function hasBodyMovers(npc)
+	for _, descendant in ipairs(npc:GetDescendants()) do
+		if descendant:IsA("BodyPosition")
+			or descendant:IsA("BodyVelocity")
+			or descendant:IsA("BodyGyro")
+			or descendant:IsA("BodyAngularVelocity")
+			or descendant:IsA("BodyForce")
+			or descendant:IsA("BodyThrust") then
+			return true
+		end
+	end
+	return false
+end
+
 local function isRealMob(npc)
 	local hrp = npc:FindFirstChild("HumanoidRootPart")
-	if not hrp then return false end
-
-	local isMoving = hrp.Velocity.Magnitude > 0.1
-	local hasScripts = npc:FindFirstChildOfClass("Script") or npc:FindFirstChildOfClass("ModuleScript")
-
-	return isMoving or hasScripts
+	local humanoid = npc:FindFirstChild("Humanoid")
+	if not hrp or not humanoid then return false end
+	
+	if humanoid.Health <= 0 then return false end
+	
+	if isInExcludedFolder(npc) then return false end
+	if excludedNames[npc.Name] then return false end
+	if not isOnGround(hrp) then return false end
+	
+	-- ต้องมี AI Script ในลูกหลาน หรือ
+	-- มี Animator พร้อมเล่นแอนิเมชัน หรือ
+	-- มี BodyMover ควบคุมการเคลื่อนที่ หรือ
+	-- เดินได้ (WalkSpeed > 0) หรือ
+	-- ขยับอยู่ (Velocity > 0.1)
+	
+	if hasDescendantAI(npc) then
+		return true
+	end
+	
+	if hasActiveAnimations(humanoid) then
+		return true
+	end
+	
+	if hasBodyMovers(npc) then
+		return true
+	end
+	
+	if humanoid.WalkSpeed > 0 then
+		return true
+	end
+	
+	if hrp.Velocity.Magnitude > 0.1 then
+		return true
+	end
+	
+	-- ถ้าไม่มีอะไรเลย ถือว่าไม่ใช่มอนที่พร้อมตี
+	return false
 end
 
 local function getAllNearbyTargets()
@@ -95,13 +161,10 @@ local function getAllNearbyTargets()
 			and npc ~= Character
 			and npc:FindFirstChild("Humanoid")
 			and npc:FindFirstChild("HumanoidRootPart")
-			and npc.Humanoid.Health > 0
-			and not excludedNames[npc.Name]
-			and not isInExcludedFolder(npc)
-			and isOnGround(npc.HumanoidRootPart) then
+			and npc.Humanoid.Health > 0 then
 
 			local dist = (spawnPos - npc.HumanoidRootPart.Position).Magnitude
-			if true then -- ลบเงื่อนไขระยะออก
+			if true then -- ลบระยะขอบเขตออกทั้งหมด
 				if isRealMob(npc) then
 					table.insert(realMobs, {type = "realmob", object = npc, distance = dist})
 				else
@@ -117,7 +180,7 @@ local function getAllNearbyTargets()
 			and not touchedParts[part] then
 
 			local dist = (spawnPos - part.Position).Magnitude
-			if true then -- ลบเงื่อนไขระยะออก
+			if true then -- ลบระยะขอบเขตออกทั้งหมด
 				table.insert(touches, {type = "touch", object = part, distance = dist})
 			end
 		end
@@ -160,39 +223,9 @@ local function walkTo(targetCFrame)
 	currentTween:Play()
 end
 
--- Move near target at 4 studs
 local function moveToTarget(target)
 	task.spawn(function()
 		while autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
 			local offset = (HumanoidRootPart.Position - target.HumanoidRootPart.Position).Unit * 4
 			local goalPos = target.HumanoidRootPart.Position + offset
-			local goalCFrame = CFrame.new(goalPos, target.HumanoidRootPart.Position)
-			walkTo(goalCFrame)
-			task.wait(0.05)
-		end
-	end)
-end
-
--- Main loop
-task.spawn(function()
-	while true do
-		if autoMoveEnabled then
-			local targets = getAllNearbyTargets()
-			local selected = targets[1]
-			if selected then
-				if selected.type == "realmob" or selected.type == "fakemob" then
-					if selected.object ~= lastTarget then
-						lastTarget = selected.object
-						moveToTarget(selected.object)
-					end
-				elseif selected.type == "touch" then
-					touchedParts[selected.object] = true
-					walkTo(selected.object.CFrame)
-					task.wait(3)
-					lastTarget = nil
-				end
-			end
-		end
-		task.wait(updateInterval)
-	end
-end)
+			local goalCFrame = CFrame

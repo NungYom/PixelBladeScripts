@@ -3,6 +3,7 @@ local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local Humanoid = Character:WaitForChild("Humanoid")
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
@@ -16,6 +17,25 @@ local updateInterval = 0.05
 local autoMoveEnabled = true
 local touchedParts = {}
 local lastTarget = nil
+
+-- GUI
+local gui = Instance.new("ScreenGui", PlayerGui)
+gui.Name = "AutoMoveGUI"
+
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0, 200, 0, 50)
+toggleButton.Position = UDim2.new(0, 20, 0, 20)
+toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.Font = Enum.Font.GothamBold
+toggleButton.TextSize = 20
+toggleButton.Text = "AutoMove: ON"
+toggleButton.Parent = gui
+
+toggleButton.MouseButton1Click:Connect(function()
+	autoMoveEnabled = not autoMoveEnabled
+	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
+end)
 
 -- Filter folders
 local goblinArenaFolder = workspace:FindFirstChild("GoblinArena")
@@ -44,7 +64,7 @@ end
 
 local function isOnGround(part)
 	local raycastParams = RaycastParams.new()
-		raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+	raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
 	raycastParams.FilterDescendantsInstances = {part.Parent}
 	local ray = workspace:Raycast(part.Position, Vector3.new(0, -10, 0), raycastParams)
 	return ray ~= nil
@@ -156,4 +176,4 @@ task.spawn(function()
 		end
 		task.wait(updateInterval)
 	end
-end)
+end) 

@@ -144,7 +144,7 @@ function monitorHealth()
 			isHealing = true
 			local currentPos = HumanoidRootPart.Position
 			local voidPos = Vector3.new(currentPos.X, currentPos.Y - 1000, currentPos.Z)
-			HumanoidRootPart.CFrame = CFrame.new(voidPos)
+			Character:PivotTo(CFrame.new(voidPos)) -- << ใช้ PivotTo เพื่อให้ตก void จริง
 			warn("Low HP! Teleporting to void...")
 
 			-- รอให้ HP รีเซ็ต

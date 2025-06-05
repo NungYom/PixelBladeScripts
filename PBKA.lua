@@ -39,8 +39,26 @@ toggleButton.MouseButton1Click:Connect(function()
 	if autoMoveEnabled then
 		Camera.CameraSubject = Humanoid
 		Camera.CameraType = Enum.CameraType.Custom
+		Humanoid.WalkSpeed = moveSpeed
 	else
 		lastTarget = nil
+		Humanoid.WalkSpeed = 16 -- reset to default walk speed
+	end
+end)
+
+-- Noclip function
+local function noclip()
+	for _, part in pairs(Character:GetChildren()) do
+		if part:IsA("BasePart") then
+			part.CanCollide = false
+		end
+	end
+end
+
+-- Run noclip every frame while AutoFarm is enabled
+RunService.Stepped:Connect(function()
+	if autoMoveEnabled then
+		noclip()
 	end
 end)
 
@@ -129,9 +147,8 @@ local function moveToPointAsync(targetPos)
 	-- หันหน้าไปทางเป้าหมาย
 	HumanoidRootPart.CFrame = CFrame.new(HumanoidRootPart.Position, targetPos)
 
-	-- MoveTo ใช้ event รอจบ
 	local reachedConnection
-	local timeout = 10
+	local timeout = 15
 	local timeoutConn
 
 	Humanoid:MoveTo(targetPos)
@@ -178,7 +195,6 @@ local function circleAroundTarget(target)
 		local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
 		local goalPos = target.HumanoidRootPart.Position + offset
 
-		-- MoveTo รอบเป้าหมายทีละจุด หลีกเลี่ยงอัพเดตตำแหน่งทุกเฟรม
 		local success = moveToPointAsync(goalPos)
 		if not success then
 			break

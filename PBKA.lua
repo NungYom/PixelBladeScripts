@@ -69,9 +69,9 @@ local function isOnGround(part)
 	return ray ~= nil
 end
 
-local function getNearestMobInRange(maxDistance)
-	local nearestMob = nil
-	local shortestDistance = math.huge
+local function getLowestHpMobInRange(maxDistance)
+	local lowestHpMob = nil
+	local lowestHp = math.huge
 
 	for _, npc in pairs(workspace:GetDescendants()) do
 		if npc:IsA("Model")
@@ -84,14 +84,14 @@ local function getNearestMobInRange(maxDistance)
 			and isOnGround(npc.HumanoidRootPart) then
 
 			local dist = (HumanoidRootPart.Position - npc.HumanoidRootPart.Position).Magnitude
-			if dist < maxDistance and dist < shortestDistance then
-				shortestDistance = dist
-				nearestMob = npc
+			if dist < maxDistance and npc.Humanoid.Health < lowestHp then
+				lowestHp = npc.Humanoid.Health
+				lowestHpMob = npc
 			end
 		end
 	end
 
-	return nearestMob
+	return lowestHpMob
 end
 
 local function getNearestUntouchedTouchPart()
@@ -147,7 +147,7 @@ end
 task.spawn(function()
 	while true do
 		if autoMoveEnabled then
-			local mob = getNearestMobInRange(combatRange)
+			local mob = getLowestHpMobInRange(combatRange)
 			if mob then
 				if mob ~= lastTarget then
 					lastTarget = mob
@@ -164,4 +164,4 @@ task.spawn(function()
 		end
 		task.wait(updateInterval)
 	end
-end)
+end) 

@@ -68,7 +68,6 @@ local function isOnGround(part)
 	return ray ~= nil
 end
 
--- ฟังก์ชันกรองผู้เล่นแบบจัดเต็ม
 local function isPlayerCharacter(model)
 	if not model or not model:IsA("Model") then return false end
 	if not model:FindFirstChild("HumanoidRootPart") then return false end
@@ -176,10 +175,33 @@ end
 
 local function moveToTarget(target)
 	if not target or not target:FindFirstChild("Humanoid") or target.Humanoid.Health <= 0 then return end
-	local offset = (HumanoidRootPart.Position - target.HumanoidRootPart.Position).Unit * 4
-	local goalPos = target.HumanoidRootPart.Position + offset
-	local goalCFrame = CFrame.new(goalPos, target.HumanoidRootPart.Position)
-	walkTo(goalCFrame)
+	
+	if target.Name == "LumberJack" then
+		-- ไล่ตำแหน่งเป้าหมาย LumberJack แบบ real-time
+		while target.Humanoid.Health > 0 and autoMoveEnabled do
+			local offset = (HumanoidRootPart.Position - target.HumanoidRootPart.Position).Unit * 4
+			local goalPos = target.HumanoidRootPart.Position + offset
+			local goalCFrame = CFrame.new(goalPos, target.HumanoidRootPart.Position)
+			
+			walkTo(goalCFrame)
+			
+			-- รอจนกว่าจะถึงเป้าหมาย หรือต้องการอัพเดตตำแหน่งใหม่ทุก 0.3 วิ
+			local reached = false
+			while not reached and target.Humanoid.Health > 0 and autoMoveEnabled do
+				local distance = (HumanoidRootPart.Position - goalPos).Magnitude
+				if distance <= 5 then
+					reached = true
+				end
+				task.wait(0.3)
+			end
+		end
+	else
+		-- ปกติเดินไปตำแหน่งแรกแล้วรอ
+		local offset = (HumanoidRootPart.Position - target.HumanoidRootPart.Position).Unit * 4
+		local goalPos = target.HumanoidRootPart.Position + offset
+		local goalCFrame = CFrame.new(goalPos, target.HumanoidRootPart.Position)
+		walkTo(goalCFrame)
+	end
 end
 
 -- Main loop
@@ -197,7 +219,6 @@ local function mainLoop()
 							task.wait(0.2)
 						until selected.object.Humanoid.Health <= 0 or not autoMoveEnabled
 						visitedTargets[selected.object] = true
-						task.wait(0.5) -- ดีเลย์หลัง mob ตาย
 					end
 				elseif selected.type == "touch" then
 					lastTarget = selected.object
@@ -206,7 +227,6 @@ local function mainLoop()
 					touchedParts[selected.object] = true
 					visitedTargets[selected.object] = true
 					lastTarget = nil
-					task.wait(0.5) -- ดีเลย์หลัง touch สำเร็จ
 				end
 			end
 		end

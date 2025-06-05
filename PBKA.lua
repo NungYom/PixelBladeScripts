@@ -8,12 +8,15 @@ local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local Humanoid = Character:WaitForChild("Humanoid")
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
--- ตั้งค่า
-local moveSpeed = 1000 -- ความเร็วสูงสุด
+-- Settings
+local moveSpeed = 100
 local scanRadius = 1500
 local combatRange = 400
-local updateInterval = 0.1
+local updateInterval = 0.05
 local autoMoveEnabled = false
+local touchedParts = {}
+local lastTarget = nil
+local waitingForNextTarget = false
 
 -- GUI
 local gui = Instance.new("ScreenGui", PlayerGui)
@@ -34,7 +37,7 @@ toggleButton.MouseButton1Click:Connect(function()
 	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
 end)
 
--- โฟลเดอร์ใน GoblinArena ที่ต้องกรอง
+-- Filter folders
 local goblinArenaFolder = workspace:FindFirstChild("GoblinArena")
 local excludeFolders = {}
 if goblinArenaFolder then
@@ -45,6 +48,11 @@ if goblinArenaFolder then
 	}
 end
 
+local excludedNames = {
+	["GoblinType1"] = true,
+	["GoblinType2"] = true
+}
+
 local function isInExcludedFolder(npc)
 	for _, folder in ipairs(excludeFolders) do
 		if folder and npc:IsDescendantOf(folder) then
@@ -54,13 +62,18 @@ local function isInExcludedFolder(npc)
 	return false
 end
 
-local excludedNames = {
-	["GoblinType1"] = true,
-	["GoblinType2"] = true
-}
+local function isOnGround(part)
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+	raycastParams.FilterDescendantsInstances = {part.Parent}
+	local ray = workspace:Raycast(part.Position, Vector3.new(0, -10, 0), raycastParams)
+	return ray ~= nil
+end
 
 local function getNearestMobInRange(maxDistance)
-	local nearestMob, shortestDistance = nil, math.huge
+	local nearestMob = nil
+	local shortestDistance = math.huge
+
 	for _, npc in pairs(workspace:GetDescendants()) do
 		if npc:IsA("Model")
 			and npc ~= Character
@@ -68,7 +81,8 @@ local function getNearestMobInRange(maxDistance)
 			and npc:FindFirstChild("HumanoidRootPart")
 			and npc.Humanoid.Health > 0
 			and not excludedNames[npc.Name]
-			and not isInExcludedFolder(npc) then
+			and not isInExcludedFolder(npc)
+			and isOnGround(npc.HumanoidRootPart) then
 
 			local dist = (HumanoidRootPart.Position - npc.HumanoidRootPart.Position).Magnitude
 			if dist < maxDistance and dist < shortestDistance then
@@ -77,13 +91,14 @@ local function getNearestMobInRange(maxDistance)
 			end
 		end
 	end
+
 	return nearestMob
 end
 
-local touchedParts = {}
-
 local function getNearestUntouchedTouchPart()
-	local nearestPart, shortestDistance = nil, math.huge
+	local nearestPart = nil
+	local shortestDistance = math.huge
+
 	for _, part in pairs(workspace:GetDescendants()) do
 		if part:IsA("BasePart")
 			and part.Name:lower() == "touch"
@@ -96,16 +111,13 @@ local function getNearestUntouchedTouchPart()
 			end
 		end
 	end
+
 	return nearestPart
 end
 
--- Tween function
 local currentTween
-local tweenTarget = nil
-
-local function walkToCFrame(targetCFrame)
+local function walkTo(targetCFrame)
 	if currentTween then currentTween:Cancel() end
-	tweenTarget = targetCFrame
 
 	local distance = (HumanoidRootPart.Position - targetCFrame.Position).Magnitude
 	local travelTime = distance / moveSpeed
@@ -117,80 +129,45 @@ local function walkToCFrame(targetCFrame)
 	currentTween:Play()
 end
 
--- NoClip
-RunService.Stepped:Connect(function()
-	if autoMoveEnabled then
-		for _, part in pairs(Character:GetDescendants()) do
-			if part:IsA("BasePart") then
-				part.CanCollide = false
-			end
+-- Move in circle around target
+local function circleAroundTarget(target)
+	task.spawn(function()
+		while autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
+			local angle = tick() % (2 * math.pi)
+			local radius = 4
+			local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
+			local goalPos = target.HumanoidRootPart.Position + offset
+			local goalCFrame = CFrame.new(goalPos, target.HumanoidRootPart.Position)
+			walkTo(goalCFrame)
+			task.wait(0.1)
 		end
-	end
-end)
-
--- Move in circle
-local function moveInCircleAroundTarget(target)
-	local radius = 4
-	local angle = 0
-	local center = target.HumanoidRootPart.Position
-
-	while autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
-		angle += math.rad(10)
-		local offset = Vector3.new(math.cos(angle), 0, math.sin(angle)) * radius
-		local pos = center + offset
-		local cframe = CFrame.new(pos, center)
-		walkToCFrame(cframe)
-		task.wait(0.1)
-	end
+	end)
 end
 
--- HP Monitor
+-- Main loop
 task.spawn(function()
-	while true do
-		if autoMoveEnabled and Humanoid.Health > 0 then
-			local maxHealth = Humanoid.MaxHealth
-			if Humanoid.Health / maxHealth < 0.2 then
-				local pos = HumanoidRootPart.Position
-				local below = pos - Vector3.new(0, 1000, 0)
-				HumanoidRootPart.CFrame = CFrame.new(below)
-				task.wait(2) -- รอให้ฟื้น HP
-			end
-		end
-		task.wait(0.25)
-	end
-end)
-
--- Main Loop
-task.spawn(function()
-	local currentTarget = nil
-	local targetStartTime = 0
-
 	while true do
 		if autoMoveEnabled then
-			local now = tick()
-
-			if currentTarget and currentTarget:FindFirstChild("Humanoid") and currentTarget.Humanoid.Health > 0 then
-				if now - targetStartTime > 3 then
-					currentTarget = nil -- เปลี่ยนเป้าหมาย
-				else
-					moveInCircleAroundTarget(currentTarget)
-				end
-			else
+			if not waitingForNextTarget then
 				local mob = getNearestMobInRange(combatRange)
 				if mob then
-					currentTarget = mob
-					targetStartTime = tick()
-
-					local targetPos = mob.HumanoidRootPart.Position
-					local dir = (targetPos - HumanoidRootPart.Position).Unit
-					local safeOffset = -dir * 2 -- ระยะห่าง 2 studs
-					local dest = targetPos + safeOffset
-					walkToCFrame(CFrame.new(dest, targetPos))
+					if mob ~= lastTarget then
+						lastTarget = mob
+						local offsetCFrame = mob.HumanoidRootPart.CFrame * CFrame.new(0, 0, -4)
+						walkTo(offsetCFrame)
+						circleAroundTarget(mob)
+					elseif mob.Humanoid.Health <= 0 then
+						waitingForNextTarget = true
+						task.delay(0.5, function()
+							lastTarget = nil
+							waitingForNextTarget = false
+						end)
+					end
 				else
 					local touchPart = getNearestUntouchedTouchPart()
 					if touchPart then
 						touchedParts[touchPart] = true
-						walkToCFrame(touchPart.CFrame)
+						walkTo(touchPart.CFrame)
 						task.wait(1.5)
 					end
 				end

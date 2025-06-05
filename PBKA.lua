@@ -9,7 +9,7 @@ local Humanoid = Character:WaitForChild("Humanoid")
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
 -- Settings
-local moveSpeed = 80
+local moveSpeed = 100
 local autoMoveEnabled = false
 local touchedParts = {}
 local visitedTargets = {}
@@ -197,6 +197,7 @@ local function mainLoop()
 							task.wait(0.2)
 						until selected.object.Humanoid.Health <= 0 or not autoMoveEnabled
 						visitedTargets[selected.object] = true
+						task.wait(0.5) -- ดีเลย์หลัง mob ตาย
 					end
 				elseif selected.type == "touch" then
 					lastTarget = selected.object
@@ -205,6 +206,7 @@ local function mainLoop()
 					touchedParts[selected.object] = true
 					visitedTargets[selected.object] = true
 					lastTarget = nil
+					task.wait(0.5) -- ดีเลย์หลัง touch สำเร็จ
 				end
 			end
 		end

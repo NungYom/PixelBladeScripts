@@ -16,7 +16,6 @@ local updateInterval = 0.05
 local autoMoveEnabled = false
 local touchedParts = {}
 local lastTarget = nil
-local waitingForNextTarget = false
 
 -- GUI
 local gui = Instance.new("ScreenGui", PlayerGui)
@@ -35,6 +34,29 @@ toggleButton.Parent = gui
 toggleButton.MouseButton1Click:Connect(function()
 	autoMoveEnabled = not autoMoveEnabled
 	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
+end)
+
+-- Float
+local floatForce = Instance.new("BodyVelocity")
+floatForce.Velocity = Vector3.new(0, 0, 0)
+floatForce.MaxForce = Vector3.new(0, math.huge, 0)
+floatForce.Name = "FloatForce"
+floatForce.Parent = HumanoidRootPart
+
+-- Noclip + Float handler
+RunService.Stepped:Connect(function()
+	if autoMoveEnabled and Character and Humanoid then
+		for _, part in pairs(Character:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.CanCollide = false
+			end
+		end
+		Humanoid.PlatformStand = true
+		floatForce.Velocity = Vector3.new(0, 0, 0)
+	else
+		Humanoid.PlatformStand = false
+		floatForce.Velocity = Vector3.zero
+	end
 end)
 
 -- Filter folders
@@ -129,11 +151,11 @@ local function walkTo(targetCFrame)
 	currentTween:Play()
 end
 
--- Move in circle around target
+-- Move around target in a circle
 local function circleAroundTarget(target)
 	task.spawn(function()
 		while autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
-			local angle = tick() % (2 * math.pi)
+			local angle = tick() % 6.28
 			local radius = 4
 			local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
 			local goalPos = target.HumanoidRootPart.Position + offset
@@ -148,28 +170,20 @@ end
 task.spawn(function()
 	while true do
 		if autoMoveEnabled then
-			if not waitingForNextTarget then
-				local mob = getNearestMobInRange(combatRange)
-				if mob then
-					if mob ~= lastTarget then
-						lastTarget = mob
-						local offsetCFrame = mob.HumanoidRootPart.CFrame * CFrame.new(0, 0, -4)
-						walkTo(offsetCFrame)
-						circleAroundTarget(mob)
-					elseif mob.Humanoid.Health <= 0 then
-						waitingForNextTarget = true
-						task.delay(0.5, function()
-							lastTarget = nil
-							waitingForNextTarget = false
-						end)
-					end
-				else
-					local touchPart = getNearestUntouchedTouchPart()
-					if touchPart then
-						touchedParts[touchPart] = true
-						walkTo(touchPart.CFrame)
-						task.wait(1.5)
-					end
+			local mob = getNearestMobInRange(combatRange)
+			if mob then
+				if mob ~= lastTarget then
+					lastTarget = mob
+					local offsetCFrame = mob.HumanoidRootPart.CFrame * CFrame.new(0, 0, -4)
+					walkTo(offsetCFrame)
+					circleAroundTarget(mob)
+				end
+			else
+				local touchPart = getNearestUntouchedTouchPart()
+				if touchPart then
+					touchedParts[touchPart] = true
+					walkTo(touchPart.CFrame)
+					task.wait(1.5)
 				end
 			end
 		end

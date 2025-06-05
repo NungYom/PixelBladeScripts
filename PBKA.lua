@@ -1,5 +1,6 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local CollectionService = game:GetService("CollectionService")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -8,8 +9,8 @@ local Humanoid = Character:WaitForChild("Humanoid")
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
 -- Settings
-local moveSpeed = 80
-local autoMoveEnabled = false -- เพิ่มการกรอง ไม่เอาผู้เล่นอื่น 
+local moveSpeed = 100
+local autoMoveEnabled = false
 local touchedParts = {}
 local visitedTargets = {}
 local lastTarget = nil
@@ -67,6 +68,55 @@ local function isOnGround(part)
 	return ray ~= nil
 end
 
+-- ฟังก์ชันกรองผู้เล่นแบบจัดเต็ม
+local function isPlayerCharacter(model)
+	if not model or not model:IsA("Model") then return false end
+	if not model:FindFirstChild("HumanoidRootPart") then return false end
+
+	local player = Players:GetPlayerFromCharacter(model)
+	if player then
+		return true
+	end
+
+	for _, p in pairs(Players:GetPlayers()) do
+		if model.Name == p.Name then
+			return true
+		end
+	end
+
+	local root = model:FindFirstChild("HumanoidRootPart")
+	if root then
+		local rootParent = root.Parent
+		if rootParent and Players:GetPlayerFromCharacter(rootParent) then
+			return true
+		end
+	end
+
+	for _, child in pairs(model:GetChildren()) do
+		if child:IsA("Tool") then
+			local toolParent = child.Parent
+			if toolParent and Players:GetPlayerFromCharacter(toolParent) then
+				return true
+			end
+		end
+	end
+
+	if model:GetAttribute("IsPlayerCharacter") == true then
+		return true
+	end
+
+	local boolVal = model:FindFirstChild("IsPlayerCharacter")
+	if boolVal and boolVal:IsA("BoolValue") and boolVal.Value == true then
+		return true
+	end
+
+	if CollectionService:HasTag(model, "Player") then
+		return true
+	end
+
+	return false
+end
+
 local function getAllTargetsSortedByDistance()
 	local targets = {}
 
@@ -80,7 +130,7 @@ local function getAllTargetsSortedByDistance()
 			and not isInExcludedFolder(npc)
 			and isOnGround(npc.HumanoidRootPart)
 			and not visitedTargets[npc]
-			and not Players:GetPlayerFromCharacter(npc) then -- กรองผู้เล่นออก
+			and not isPlayerCharacter(npc) then
 
 			table.insert(targets, {
 				type = "mob",

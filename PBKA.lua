@@ -1,7 +1,6 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
-local Camera = workspace.CurrentCamera
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -72,9 +71,9 @@ local function isOnGround(part)
 	return ray ~= nil
 end
 
-local function getLowestHpMobInRange(maxDistance)
-	local lowestHpMob = nil
-	local lowestHp = math.huge
+local function getNearestMobInRange(maxDistance)
+	local nearestMob = nil
+	local shortestDistance = math.huge
 
 	for _, npc in pairs(workspace:GetDescendants()) do
 		if npc:IsA("Model")
@@ -87,14 +86,14 @@ local function getLowestHpMobInRange(maxDistance)
 			and isOnGround(npc.HumanoidRootPart) then
 
 			local dist = (HumanoidRootPart.Position - npc.HumanoidRootPart.Position).Magnitude
-			if dist < maxDistance and npc.Humanoid.Health < lowestHp then
-				lowestHp = npc.Humanoid.Health
-				lowestHpMob = npc
+			if dist < maxDistance and dist < shortestDistance then
+				shortestDistance = dist
+				nearestMob = npc
 			end
 		end
 	end
 
-	return lowestHpMob
+	return nearestMob
 end
 
 local function getNearestUntouchedTouchPart()
@@ -131,7 +130,7 @@ local function walkTo(targetCFrame)
 end
 
 -- Move near target at 4 studs
-local function circleAroundTarget(target)
+local function moveToTarget(target)
 	task.spawn(function()
 		while autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
 			local touchPart = getNearestUntouchedTouchPart()
@@ -143,9 +142,7 @@ local function circleAroundTarget(target)
 				return
 			end
 
-			local radius = 4
-			local angle = math.random() * 2 * math.pi
-			local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
+			local offset = (HumanoidRootPart.Position - target.HumanoidRootPart.Position).Unit * 4
 			local goalPos = target.HumanoidRootPart.Position + offset
 			local goalCFrame = CFrame.new(goalPos, target.HumanoidRootPart.Position)
 			walkTo(goalCFrame)
@@ -153,14 +150,6 @@ local function circleAroundTarget(target)
 		end
 	end)
 end
-
--- Lock camera to player
-RunService.RenderStepped:Connect(function()
-	if Camera.CameraSubject ~= Humanoid then
-		Camera.CameraSubject = Humanoid
-		Camera.CameraType = Enum.CameraType.Custom
-	end
-end)
 
 -- Main loop
 task.spawn(function()
@@ -177,7 +166,7 @@ task.spawn(function()
 				local mob = nil
 
 				while not mob and combatRange <= scanRadius do
-					mob = getLowestHpMobInRange(combatRange)
+					mob = getNearestMobInRange(combatRange)
 					if not mob then
 						combatRange += 100
 					end
@@ -186,7 +175,7 @@ task.spawn(function()
 				if mob then
 					if mob ~= lastTarget then
 						lastTarget = mob
-						circleAroundTarget(mob)
+						moveToTarget(mob)
 					end
 				end
 			end

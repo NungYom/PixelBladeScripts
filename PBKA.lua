@@ -10,9 +10,6 @@ local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
 -- Settings
 local moveSpeed = 100
-local scanRadius = 400
-local baseCombatRange = 100
-local combatRange = baseCombatRange
 local updateInterval = 0.05
 local autoMoveEnabled = false
 local touchedParts = {}
@@ -71,7 +68,6 @@ local function isOnGround(part)
 	return ray ~= nil
 end
 
--- เช็คมอนที่มี behavior (AI) คือเคลื่อนไหวหรือมี Script
 local function isRealMob(npc)
 	local hrp = npc:FindFirstChild("HumanoidRootPart")
 	if not hrp then return false end
@@ -82,7 +78,7 @@ local function isRealMob(npc)
 	return isMoving or hasScripts
 end
 
-local function getAllNearbyTargets(maxDistance)
+local function getAllNearbyTargets()
 	local realMobs = {}
 	local fakeMobs = {}
 	local touches = {}
@@ -105,7 +101,7 @@ local function getAllNearbyTargets(maxDistance)
 			and isOnGround(npc.HumanoidRootPart) then
 
 			local dist = (spawnPos - npc.HumanoidRootPart.Position).Magnitude
-			if dist <= maxDistance then
+			if true then -- ลบเงื่อนไขระยะออก
 				if isRealMob(npc) then
 					table.insert(realMobs, {type = "realmob", object = npc, distance = dist})
 				else
@@ -121,7 +117,7 @@ local function getAllNearbyTargets(maxDistance)
 			and not touchedParts[part] then
 
 			local dist = (spawnPos - part.Position).Magnitude
-			if dist <= maxDistance then
+			if true then -- ลบเงื่อนไขระยะออก
 				table.insert(touches, {type = "touch", object = part, distance = dist})
 			end
 		end
@@ -181,7 +177,7 @@ end
 task.spawn(function()
 	while true do
 		if autoMoveEnabled then
-			local targets = getAllNearbyTargets(scanRadius)
+			local targets = getAllNearbyTargets()
 			local selected = targets[1]
 			if selected then
 				if selected.type == "realmob" or selected.type == "fakemob" then

@@ -19,9 +19,8 @@ local touchedParts = {}
 local lastTarget = nil
 
 -- GUI
-local gui = Instance.new("ScreenGui")
+local gui = Instance.new("ScreenGui", PlayerGui)
 gui.Name = "AutoMoveGUI"
-gui.Parent = PlayerGui
 
 local toggleButton = Instance.new("TextButton")
 toggleButton.Size = UDim2.new(0, 200, 0, 50)
@@ -32,6 +31,25 @@ toggleButton.Font = Enum.Font.GothamBold
 toggleButton.TextSize = 20
 toggleButton.Text = "AutoMove: OFF"
 toggleButton.Parent = gui
+
+toggleButton.MouseButton1Click:Connect(function()
+	autoMoveEnabled = not autoMoveEnabled
+	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
+
+	if autoMoveEnabled then
+		startAutoPressE()
+	else
+		stopAutoPressE()
+		if circleThread then
+			circleThread:Disconnect()
+			circleThread = nil
+		end
+		if currentTween then
+			currentTween:Cancel()
+			currentTween = nil
+		end
+	end
+end)
 
 -- Filter folders
 local goblinArenaFolder = workspace:FindFirstChild("GoblinArena")
@@ -125,14 +143,8 @@ local function walkTo(targetCFrame)
 	currentTween:Play()
 end
 
--- Circle around the target at 20 studs smoothly
 local circleThread
 local function circleAroundTarget(target)
-	if circleThread then
-		circleThread:Disconnect()
-		circleThread = nil
-	end
-
 	circleThread = RunService.Heartbeat:Connect(function()
 		if not autoMoveEnabled or not target or not target:FindFirstChild("Humanoid") or target.Humanoid.Health <= 0 then
 			circleThread:Disconnect()
@@ -140,7 +152,7 @@ local function circleAroundTarget(target)
 			return
 		end
 
-		local angle = tick() % (2 * math.pi)
+		local angle = tick() % 6.28
 		local radius = 20
 		local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
 		local goalPos = target.HumanoidRootPart.Position + offset
@@ -149,52 +161,33 @@ local function circleAroundTarget(target)
 	end)
 end
 
--- Fire plrUpgrade event every 1 second while autoMoveEnabled
+-- Press E (fire server event) every 1 second while autoMoveEnabled
 local upgradeThread
-local function startAutoUpgrade()
+local function pressE()
+	local args = {3}
+	pcall(function()
+		ReplicatedStorage:WaitForChild("remotes"):WaitForChild("plrUpgrade"):FireServer(unpack(args))
+	end)
+end
+
+local function startAutoPressE()
 	if upgradeThread then return end
 	upgradeThread = task.spawn(function()
 		while autoMoveEnabled do
-			local success, err = pcall(function()
-				local args = {3}
-				ReplicatedStorage:WaitForChild("remotes"):WaitForChild("plrUpgrade"):FireServer(unpack(args))
-			end)
-			if not success then
-				warn("Failed to fire plrUpgrade: "..tostring(err))
-			end
+			pressE()
 			task.wait(1)
 		end
 		upgradeThread = nil
 	end)
 end
 
-local function stopAutoUpgrade()
+local function stopAutoPressE()
 	if upgradeThread then
-		upgradeThread = nil -- just flag to nil, the loop will stop naturally
+		upgradeThread = nil
 	end
 end
 
--- Toggle button click handler
-toggleButton.MouseButton1Click:Connect(function()
-	autoMoveEnabled = not autoMoveEnabled
-	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
-
-	if autoMoveEnabled then
-		startAutoUpgrade()
-	else
-		stopAutoUpgrade()
-		if circleThread then
-			circleThread:Disconnect()
-			circleThread = nil
-		end
-		if currentTween then
-			currentTween:Cancel()
-			currentTween = nil
-		end
-	end
-end)
-
--- Main loop for moving and targeting mobs or touch parts
+-- Main loop
 task.spawn(function()
 	while true do
 		if autoMoveEnabled then

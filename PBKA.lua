@@ -71,9 +71,8 @@ local function isOnGround(part)
 	return ray ~= nil
 end
 
-local function getNearestMobInRange(maxDistance)
-	local nearestMob = nil
-	local shortestDistance = math.huge
+local function getAllNearbyTargets(maxDistance)
+	local targets = {}
 
 	for _, npc in pairs(workspace:GetDescendants()) do
 		if npc:IsA("Model")
@@ -85,35 +84,32 @@ local function getNearestMobInRange(maxDistance)
 			and not isInExcludedFolder(npc)
 			and isOnGround(npc.HumanoidRootPart) then
 
-			local dist = (HumanoidRootPart.Position - npc.HumanoidRootPart.Position).Magnitude
-			if dist < maxDistance and dist < shortestDistance then
-				shortestDistance = dist
-				nearestMob = npc
-			end
+			table.insert(targets, {
+				type = "mob",
+				object = npc,
+				distance = (HumanoidRootPart.Position - npc.HumanoidRootPart.Position).Magnitude
+			})
 		end
 	end
-
-	return nearestMob
-end
-
-local function getNearestUntouchedTouchPart()
-	local nearestPart = nil
-	local shortestDistance = math.huge
 
 	for _, part in pairs(workspace:GetDescendants()) do
 		if part:IsA("BasePart")
 			and part.Name:lower() == "touch"
 			and not touchedParts[part] then
 
-			local dist = (HumanoidRootPart.Position - part.Position).Magnitude
-			if dist < shortestDistance then
-				shortestDistance = dist
-				nearestPart = part
-			end
+			table.insert(targets, {
+				type = "touch",
+				object = part,
+				distance = (HumanoidRootPart.Position - part.Position).Magnitude
+			})
 		end
 	end
 
-	return nearestPart
+	table.sort(targets, function(a, b)
+		return a.distance < b.distance
+	end)
+
+	return targets
 end
 
 local function walkTo(targetCFrame)
@@ -143,33 +139,22 @@ local function moveToTarget(target)
 end
 
 -- Main loop
-local checkedTouchThisCycle = false
-
 task.spawn(function()
 	while true do
 		if autoMoveEnabled then
-			-- 1. Attack nearest mob
-			local mob = getNearestMobInRange(scanRadius)
-			if mob then
-				if mob ~= lastTarget then
-					lastTarget = mob
-					moveToTarget(mob)
-				end
-			else
-				-- 2. Go to nearest touch part
-				local touchPart = getNearestUntouchedTouchPart()
-				if touchPart then
-					touchedParts[touchPart] = true
-					walkTo(touchPart.CFrame)
+			local targets = getAllNearbyTargets(scanRadius)
+			local selected = targets[1]
+			if selected then
+				if selected.type == "mob" then
+					if selected.object ~= lastTarget then
+						lastTarget = selected.object
+						moveToTarget(selected.object)
+					end
+				elseif selected.type == "touch" then
+					touchedParts[selected.object] = true
+					walkTo(selected.object.CFrame)
 					task.wait(3)
 					lastTarget = nil
-				else
-					-- 3. Fallback: any mob in range
-					local fallbackMob = getNearestMobInRange(scanRadius)
-					if fallbackMob and fallbackMob ~= lastTarget then
-						lastTarget = fallbackMob
-						moveToTarget(fallbackMob)
-					end
 				end
 			end
 		end

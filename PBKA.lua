@@ -11,7 +11,8 @@ local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 -- Settings
 local moveSpeed = 100
 local scanRadius = 1500
-local combatRange = 400
+local baseCombatRange = 300
+local combatRange = baseCombatRange
 local updateInterval = 0.05
 local autoMoveEnabled = false
 local touchedParts = {}
@@ -147,7 +148,17 @@ end
 task.spawn(function()
 	while true do
 		if autoMoveEnabled then
-			local mob = getLowestHpMobInRange(combatRange)
+			combatRange = baseCombatRange
+			local mob = nil
+
+			-- Try expanding range step-by-step
+			while not mob and combatRange <= scanRadius do
+				mob = getLowestHpMobInRange(combatRange)
+				if not mob then
+					combatRange += 100
+				end
+			end
+
 			if mob then
 				if mob ~= lastTarget then
 					lastTarget = mob
@@ -164,4 +175,4 @@ task.spawn(function()
 		end
 		task.wait(updateInterval)
 	end
-end) 
+end)

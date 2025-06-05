@@ -3,7 +3,6 @@ local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local Humanoid = Character:WaitForChild("Humanoid")
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
@@ -14,51 +13,9 @@ local scanRadius = 1500
 local baseCombatRange = 100
 local combatRange = baseCombatRange
 local updateInterval = 0.05
-local autoMoveEnabled = false
+local autoMoveEnabled = true
 local touchedParts = {}
 local lastTarget = nil
-
--- GUI
-local gui = Instance.new("ScreenGui", PlayerGui)
-gui.Name = "AutoMoveGUI"
-
-local toggleButton = Instance.new("TextButton")
-toggleButton.Size = UDim2.new(0, 200, 0, 50)
-toggleButton.Position = UDim2.new(0, 20, 0, 20)
-toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleButton.Font = Enum.Font.GothamBold
-toggleButton.TextSize = 20
-toggleButton.Text = "AutoMove: OFF"
-toggleButton.Parent = gui
-
-toggleButton.MouseButton1Click:Connect(function()
-	autoMoveEnabled = not autoMoveEnabled
-	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
-end)
-
--- Small HP Label
-local hpLabel = Instance.new("TextLabel")
-hpLabel.Size = UDim2.new(0, 200, 0, 20)
-hpLabel.Position = UDim2.new(0, 20, 0, 70)
-hpLabel.BackgroundTransparency = 1
-hpLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-hpLabel.Font = Enum.Font.Gotham
-hpLabel.TextSize = 14
-hpLabel.Text = ""
-hpLabel.Parent = gui
-
--- Update HP % regularly
-task.spawn(function()
-	while true do
-		local hp = Humanoid.Health
-		local maxHp = Humanoid.MaxHealth
-		if maxHp > 0 then
-			hpLabel.Text = math.floor((hp / maxHp) * 100) .. "% HP"
-		end
-		task.wait(0.5)
-	end
-end)
 
 -- Filter folders
 local goblinArenaFolder = workspace:FindFirstChild("GoblinArena")
@@ -87,7 +44,7 @@ end
 
 local function isOnGround(part)
 	local raycastParams = RaycastParams.new()
-	raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+		raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
 	raycastParams.FilterDescendantsInstances = {part.Parent}
 	local ray = workspace:Raycast(part.Position, Vector3.new(0, -10, 0), raycastParams)
 	return ray ~= nil

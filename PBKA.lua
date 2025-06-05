@@ -1,5 +1,4 @@
 local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
 
@@ -14,11 +13,10 @@ local moveSpeed = 100
 local scanRadius = 1500
 local baseCombatRange = 100
 local combatRange = baseCombatRange
-local updateInterval = 0.05
+local updateInterval = 0.1 -- ลดความถี่ลงเพื่อประหยัด CPU
 local autoMoveEnabled = false
 local touchedParts = {}
 local lastTarget = nil
-local currentTween = nil
 
 -- GUI
 local gui = Instance.new("ScreenGui", PlayerGui)
@@ -37,6 +35,9 @@ toggleButton.Parent = gui
 toggleButton.MouseButton1Click:Connect(function()
 	autoMoveEnabled = not autoMoveEnabled
 	toggleButton.Text = "AutoFarm: " .. (autoMoveEnabled and "ON" or "OFF")
+	if not autoMoveEnabled then
+		lastTarget = nil
+	end
 end)
 
 -- Filter folders
@@ -64,12 +65,20 @@ local function isInExcludedFolder(npc)
 	return false
 end
 
+local lastGroundCheckPos = nil
+local lastGroundCheckResult = true
 local function isOnGround(part)
+	-- เช็คพื้นแบบ cache ถ้าตำแหน่งไม่ขยับมากจะไม่ raycast ซ้ำ
+	if lastGroundCheckPos and (part.Position - lastGroundCheckPos).Magnitude < 2 then
+		return lastGroundCheckResult
+	end
 	local raycastParams = RaycastParams.new()
 	raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
 	raycastParams.FilterDescendantsInstances = {part.Parent}
 	local ray = workspace:Raycast(part.Position, Vector3.new(0, -10, 0), raycastParams)
-	return ray ~= nil
+	lastGroundCheckPos = part.Position
+	lastGroundCheckResult = ray ~= nil
+	return lastGroundCheckResult
 end
 
 local function getLowestHpMobInRange(maxDistance)
@@ -117,48 +126,72 @@ local function getNearestUntouchedTouchPart()
 	return nearestPart
 end
 
+-- เคลื่อนที่แบบ Lerp (นิ่มกว่า Tween)
 local function walkTo(targetCFrame)
-	if currentTween then currentTween:Cancel() end
+	local startPos = HumanoidRootPart.Position
+	local goalPos = targetCFrame.Position
+	local distance = (goalPos - startPos).Magnitude
+	local duration = distance / moveSpeed
+	local elapsed = 0
+	local step = updateInterval
 
-	local distance = (HumanoidRootPart.Position - targetCFrame.Position).Magnitude
-	local travelTime = distance / moveSpeed
+	while elapsed < duration and autoMoveEnabled do
+		local alpha = elapsed / duration
+		local newPos = startPos:Lerp(goalPos, alpha)
+		HumanoidRootPart.CFrame = CFrame.new(newPos, goalPos) -- หันหน้าไปยังเป้าหมาย
+		task.wait(step)
+		elapsed = elapsed + step
+	end
 
-	local tweenInfo = TweenInfo.new(travelTime, Enum.EasingStyle.Linear)
-	currentTween = TweenService:Create(HumanoidRootPart, tweenInfo, {
-		CFrame = targetCFrame
-	})
-	currentTween:Play()
+	-- ตั้งตำแหน่งสุดท้ายให้ตรงเป๊ะ
+	if autoMoveEnabled then
+		HumanoidRootPart.CFrame = CFrame.new(goalPos, goalPos)
+	end
 end
 
--- Circle around the target at 5 studs
+-- ป้องกัน circleAroundTarget ซ้อนกัน
+local isCircling = false
+
 local function circleAroundTarget(target)
-	task.spawn(function()
-		while autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
-			local touchPart = getNearestUntouchedTouchPart()
-			if touchPart then
-				touchedParts[touchPart] = true
-				walkTo(touchPart.CFrame)
-				task.wait(3)
-				lastTarget = nil
-				return
-			end
+	if isCircling then return end
+	isCircling = true
+	Humanoid.AutoRotate = false
 
-			local angle = tick() % 6.28
-			local radius = 5
-			local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
-			local goalPos = target.HumanoidRootPart.Position + offset
-			local goalCFrame = CFrame.new(goalPos, target.HumanoidRootPart.Position)
-			walkTo(goalCFrame)
-			task.wait(0.05)
+	while autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
+		local touchPart = getNearestUntouchedTouchPart()
+		if touchPart then
+			touchedParts[touchPart] = true
+			walkTo(touchPart.CFrame)
+			task.wait(3)
+			lastTarget = nil
+			break
 		end
-	end)
+
+		local angle = tick() % (2 * math.pi)
+		local radius = 5
+		local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
+		local goalPos = target.HumanoidRootPart.Position + offset
+
+		local currentPos = HumanoidRootPart.Position
+		local newPos = currentPos:Lerp(goalPos, 0.2)
+		HumanoidRootPart.CFrame = CFrame.new(newPos, target.HumanoidRootPart.Position)
+
+		task.wait(0.05)
+	end
+
+	Humanoid.AutoRotate = true
+	isCircling = false
 end
 
--- Lock camera to player
+-- ล็อกกล้องแค่ตอนเปิด AutoMove
+local cameraLocked = false
 RunService.RenderStepped:Connect(function()
-	if Camera.CameraSubject ~= Humanoid then
+	if autoMoveEnabled and not cameraLocked then
 		Camera.CameraSubject = Humanoid
 		Camera.CameraType = Enum.CameraType.Custom
+		cameraLocked = true
+	elseif not autoMoveEnabled and cameraLocked then
+		cameraLocked = false
 	end
 end)
 
@@ -180,6 +213,7 @@ task.spawn(function()
 					mob = getLowestHpMobInRange(combatRange)
 					if not mob then
 						combatRange += 100
+						task.wait(0.05)
 					end
 				end
 

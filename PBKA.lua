@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -17,6 +18,9 @@ local autoMoveEnabled = false
 local touchedParts = {}
 local lastTarget = nil
 
+-- RemoteEvent สมมติ ชื่อ UseSkill (กดปุ่ม E)
+local useSkillRemote = ReplicatedStorage:WaitForChild("remotes"):WaitForChild("UseSkill")
+
 -- GUI
 local gui = Instance.new("ScreenGui", PlayerGui)
 gui.Name = "AutoMoveGUI"
@@ -31,9 +35,57 @@ toggleButton.TextSize = 20
 toggleButton.Text = "AutoMove: OFF"
 toggleButton.Parent = gui
 
+local autoMoveTask = nil
+local skillTask = nil
+
 toggleButton.MouseButton1Click:Connect(function()
 	autoMoveEnabled = not autoMoveEnabled
 	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
+
+	if autoMoveEnabled then
+		-- เริ่มฟังก์ชัน auto move
+		autoMoveTask = task.spawn(function()
+			while autoMoveEnabled do
+				local mob = getNearestMobInRange(combatRange)
+				if mob then
+					if mob ~= lastTarget then
+						lastTarget = mob
+						circleAroundTarget(mob)
+					end
+				else
+					local touchPart = getNearestUntouchedTouchPart()
+					if touchPart then
+						touchedParts[touchPart] = true
+						walkTo(touchPart.CFrame)
+						task.wait(1.5)
+					end
+				end
+				task.wait(updateInterval)
+			end
+		end)
+
+		-- เริ่มกดปุ่ม E อัตโนมัติ ทุก 1 วินาที
+		skillTask = task.spawn(function()
+			while autoMoveEnabled do
+				pcall(function()
+					useSkillRemote:FireServer()
+				end)
+				task.wait(1)
+			end
+		end)
+
+	else
+		-- หยุดทั้งสองงาน
+		if autoMoveTask then
+			autoMoveTask:Cancel()
+			autoMoveTask = nil
+		end
+		if skillTask then
+			skillTask:Cancel()
+			skillTask = nil
+		end
+		lastTarget = nil
+	end
 end)
 
 -- Filter folders
@@ -69,23 +121,11 @@ local function isOnGround(part)
 	return ray ~= nil
 end
 
--- Cache Descendants every 1.5 seconds to reduce load
-local allMobs = {}
-local allTouchParts = {}
-
-task.spawn(function()
-	while true do
-		allMobs = workspace:GetDescendants()
-		allTouchParts = workspace:GetDescendants()
-		task.wait(1.5)
-	end
-end)
-
 local function getNearestMobInRange(maxDistance)
 	local nearestMob = nil
 	local shortestDistance = math.huge
 
-	for _, npc in pairs(allMobs) do
+	for _, npc in pairs(workspace:GetDescendants()) do
 		if npc:IsA("Model")
 			and npc ~= Character
 			and npc:FindFirstChild("Humanoid")
@@ -110,7 +150,7 @@ local function getNearestUntouchedTouchPart()
 	local nearestPart = nil
 	local shortestDistance = math.huge
 
-	for _, part in pairs(allTouchParts) do
+	for _, part in pairs(workspace:GetDescendants()) do
 		if part:IsA("BasePart")
 			and part.Name:lower() == "touch"
 			and not touchedParts[part] then
@@ -127,12 +167,7 @@ local function getNearestUntouchedTouchPart()
 end
 
 local currentTween
-local tweenCooldown = false
-
 local function walkTo(targetCFrame)
-	if tweenCooldown then return end
-	tweenCooldown = true
-
 	if currentTween then currentTween:Cancel() end
 
 	local distance = (HumanoidRootPart.Position - targetCFrame.Position).Magnitude
@@ -143,55 +178,19 @@ local function walkTo(targetCFrame)
 		CFrame = targetCFrame
 	})
 	currentTween:Play()
-
-	task.delay(travelTime * 0.8, function()
-		tweenCooldown = false
-	end)
 end
 
--- Circle around the target at 20 studs smoothly, update every 0.3s
+-- Circle around the target at 20 studs
 local function circleAroundTarget(target)
 	task.spawn(function()
 		while autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
-			local angle = tick() * 0.8
+			local angle = tick() % 6.28
 			local radius = 20
 			local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
 			local goalPos = target.HumanoidRootPart.Position + offset
 			local goalCFrame = CFrame.new(goalPos, target.HumanoidRootPart.Position)
 			walkTo(goalCFrame)
-			task.wait(0.3)
+			task.wait(0.05)
 		end
 	end)
 end
-
--- Main loop
-task.spawn(function()
-	while true do
-		if autoMoveEnabled then
-			local mob = getNearestMobInRange(combatRange)
-			if mob then
-				if mob ~= lastTarget then
-					lastTarget = mob
-					circleAroundTarget(mob)
-				end
-			else
-				local touchPart = getNearestUntouchedTouchPart()
-				if touchPart then
-					touchedParts[touchPart] = true
-					walkTo(touchPart.CFrame)
-					task.wait(1.5)
-				end
-			end
-		end
-		task.wait(updateInterval)
-	end
-end)
-
--- Fire plrUpgrade every 5 seconds
-task.spawn(function()
-	while true do
-		local args = {3}
-		game:GetService("ReplicatedStorage"):WaitForChild("remotes"):WaitForChild("plrUpgrade"):FireServer(unpack(args))
-		task.wait(5)
-	end
-end)

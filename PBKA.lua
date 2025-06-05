@@ -68,28 +68,7 @@ local function isOnGround(part)
 	return ray ~= nil
 end
 
--- ตรวจสอบว่ามี Behavior/AI จริงๆไหม (แยก mob ที่ยืนเฉยๆ)
-local function hasActiveBehavior(npc)
-	-- วิธีเช็คที่ค่อนข้างทั่วๆไป เช่น มี Script ที่เปิดใช้งาน, มี AI Module, หรือมี HumanoidRootPart เคลื่อนไหวอยู่บ้าง
-	-- เนื่องจากไม่มีข้อมูลชัดเจนของ Behavior ในเกมนี้ ผมจะเช็คอย่างคร่าวๆโดยดูว่า npc มี Script ที่ Enabled อยู่ในตัวหรือไม่
-	for _, child in ipairs(npc:GetChildren()) do
-		if child:IsA("Script") or child:IsA("LocalScript") or child:IsA("ModuleScript") then
-			if child.Enabled then
-				return true
-			end
-		end
-	end
-	-- หรือถ้า npc เดิน/เคลื่อนไหวบ้าง (ตรวจสอบ velocity HumanoidRootPart)
-	local vel = npc:FindFirstChild("HumanoidRootPart") and npc.HumanoidRootPart.Velocity.Magnitude or 0
-	if vel > 0.1 then
-		return true
-	end
-
-	return false
-end
-
--- ตรวจสอบว่าตัวละครตีได้จริงไหม (มี Humanoid, HP > 0, ไม่ใช่ excludedNames, อยู่บนพื้น)
-local function isValidTarget(npc)
+local function isValidMob(npc)
 	if not npc or not npc:IsA("Model") then return false end
 	local humanoid = npc:FindFirstChild("Humanoid")
 	local hrp = npc:FindFirstChild("HumanoidRootPart")
@@ -98,7 +77,6 @@ local function isValidTarget(npc)
 	if excludedNames[npc.Name] then return false end
 	if isInExcludedFolder(npc) then return false end
 	if not isOnGround(hrp) then return false end
-	if not hasActiveBehavior(npc) then return false end
 	return true
 end
 
@@ -106,45 +84,36 @@ local function getAllTargets()
 	local worldSpawn = workspace:FindFirstChild("SpawnLocation") or Instance.new("Part")
 	worldSpawn.Position = Vector3.new(0,0,0)
 
-	local targetsWithBehaviorFar = {}
-	local targetsWithBehaviorNear = {}
-	local touchTargets = {}
+	local targets = {}
 
 	for _, npc in pairs(workspace:GetDescendants()) do
 		if npc:IsA("Model") and npc ~= Character then
-			if isValidTarget(npc) then
-				-- แยกใกล้ไกลจาก world spawn ตาม velocity (หรือจะใช้ตำแหน่งอย่างเดียวก็ได้)
-				-- ผมจะใช้ระยะจาก spawn เป็นหลัก แต่ต้องแยกให้ตามโจทย์
-				-- หาก velocity สูงกว่า 0.1 คือ active behavior => far group
-				local hrp = npc.HumanoidRootPart
-				local dist = (worldSpawn.Position - hrp.Position).Magnitude
-				if hasActiveBehavior(npc) then
-					-- ถ้าอยู่ไกล spawn กว่าค่าเฉลี่ย + 50 studs ถือว่า far group
-					-- แทนการหาค่าเฉลี่ย จะใช้ค่าเกณฑ์ 150 studs (ปรับได้)
-					if dist > 150 then
-						table.insert(targetsWithBehaviorFar, {npc = npc, dist = dist})
-					else
-						table.insert(targetsWithBehaviorNear, {npc = npc, dist = dist})
-					end
-				end
+			if isValidMob(npc) then
+				table.insert(targets, {
+					type = "mob",
+					object = npc,
+					distance = (worldSpawn.Position - npc.HumanoidRootPart.Position).Magnitude
+				})
 			end
 		end
 	end
 
-	-- เก็บ touch ส่วนที่ยังไม่โดน
 	for _, part in pairs(workspace:GetDescendants()) do
 		if part:IsA("BasePart") and part.Name:lower() == "touch" and not touchedParts[part] then
-			local dist = (worldSpawn.Position - part.Position).Magnitude
-			table.insert(touchTargets, {part = part, dist = dist})
+			table.insert(targets, {
+				type = "touch",
+				object = part,
+				distance = (worldSpawn.Position - part.Position).Magnitude
+			})
 		end
 	end
 
-	-- จัดเรียงแต่ละกลุ่มตามระยะจาก spawn
-	table.sort(targetsWithBehaviorFar, function(a,b) return a.dist > b.dist end) -- far: มากไปน้อย (ไกลไปใกล้)
-	table.sort(targetsWithBehaviorNear, function(a,b) return a.dist < b.dist end) -- near: น้อยไปมาก (ใกล้ไปไกล)
-	table.sort(touchTargets, function(a,b) return a.dist < b.dist end) -- touch: ใกล้ไปไกล
+	-- sort by closest to farthest from world spawn
+	table.sort(targets, function(a, b)
+		return a.distance < b.distance
+	end)
 
-	return targetsWithBehaviorFar, targetsWithBehaviorNear, touchTargets
+	return targets
 end
 
 local function walkTo(targetCFrame)
@@ -181,31 +150,20 @@ end
 task.spawn(function()
 	while true do
 		if autoMoveEnabled then
-			local far, near, touchs = getAllTargets()
-			local target = nil
+			local targets = getAllTargets()
+			local selected = targets[1]
 
-			-- เลือกเป้าหมายตามลำดับ priority
-			if #far > 0 then
-				target = far[1].npc
-			elseif #near > 0 then
-				target = near[1].npc
-			elseif #touchs > 0 then
-				target = touchs[1].part
-			end
-
-			if target then
-				if typeof(target) == "Instance" and target:IsA("BasePart") then
-					-- เป็น touch
-					touchedParts[target] = true
-					walkTo(target.CFrame)
+			if selected then
+				if selected.type == "mob" then
+					if selected.object ~= lastTarget then
+						lastTarget = selected.object
+						moveToTarget(selected.object)
+					end
+				elseif selected.type == "touch" then
+					touchedParts[selected.object] = true
+					walkTo(selected.object.CFrame)
 					task.wait(3)
 					lastTarget = nil
-				elseif target:IsA("Model") then
-					-- เป็น mob
-					if target ~= lastTarget then
-						lastTarget = target
-						moveToTarget(target)
-					end
 				end
 			end
 		end

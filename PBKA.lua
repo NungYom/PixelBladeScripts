@@ -9,7 +9,7 @@ local Humanoid = Character:WaitForChild("Humanoid")
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
 -- Settings
-local moveSpeed = 100
+local moveSpeed = 80
 local autoMoveEnabled = false
 local touchedParts = {}
 local visitedTargets = {}

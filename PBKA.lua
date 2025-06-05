@@ -1,15 +1,13 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local Humanoid = Character:WaitForChild("Humanoid")
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
-
--- รอให้ GUI โหลดเต็มที่ก่อนสร้าง UI
-RunService.RenderStepped:Wait()
 
 -- Settings
 local moveSpeed = 100
@@ -23,7 +21,6 @@ local lastTarget = nil
 -- GUI
 local gui = Instance.new("ScreenGui")
 gui.Name = "AutoMoveGUI"
-gui.ResetOnSpawn = false
 gui.Parent = PlayerGui
 
 local toggleButton = Instance.new("TextButton")
@@ -35,11 +32,6 @@ toggleButton.Font = Enum.Font.GothamBold
 toggleButton.TextSize = 20
 toggleButton.Text = "AutoMove: OFF"
 toggleButton.Parent = gui
-
-toggleButton.MouseButton1Click:Connect(function()
-	autoMoveEnabled = not autoMoveEnabled
-	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
-end)
 
 -- Filter folders
 local goblinArenaFolder = workspace:FindFirstChild("GoblinArena")
@@ -133,22 +125,76 @@ local function walkTo(targetCFrame)
 	currentTween:Play()
 end
 
--- Circle around the target at 20 studs
+-- Circle around the target at 20 studs smoothly
+local circleThread
 local function circleAroundTarget(target)
-	task.spawn(function()
-		while autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
-			local angle = tick() % 6.28
-			local radius = 20
-			local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
-			local goalPos = target.HumanoidRootPart.Position + offset
-			local goalCFrame = CFrame.new(goalPos, target.HumanoidRootPart.Position)
-			walkTo(goalCFrame)
-			task.wait(0.05)
+	if circleThread then
+		circleThread:Disconnect()
+		circleThread = nil
+	end
+
+	circleThread = RunService.Heartbeat:Connect(function()
+		if not autoMoveEnabled or not target or not target:FindFirstChild("Humanoid") or target.Humanoid.Health <= 0 then
+			circleThread:Disconnect()
+			circleThread = nil
+			return
 		end
+
+		local angle = tick() % (2 * math.pi)
+		local radius = 20
+		local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
+		local goalPos = target.HumanoidRootPart.Position + offset
+		local goalCFrame = CFrame.new(goalPos, target.HumanoidRootPart.Position)
+		walkTo(goalCFrame)
 	end)
 end
 
--- Main loop
+-- Fire plrUpgrade event every 1 second while autoMoveEnabled
+local upgradeThread
+local function startAutoUpgrade()
+	if upgradeThread then return end
+	upgradeThread = task.spawn(function()
+		while autoMoveEnabled do
+			local success, err = pcall(function()
+				local args = {3}
+				ReplicatedStorage:WaitForChild("remotes"):WaitForChild("plrUpgrade"):FireServer(unpack(args))
+			end)
+			if not success then
+				warn("Failed to fire plrUpgrade: "..tostring(err))
+			end
+			task.wait(1)
+		end
+		upgradeThread = nil
+	end)
+end
+
+local function stopAutoUpgrade()
+	if upgradeThread then
+		upgradeThread = nil -- just flag to nil, the loop will stop naturally
+	end
+end
+
+-- Toggle button click handler
+toggleButton.MouseButton1Click:Connect(function()
+	autoMoveEnabled = not autoMoveEnabled
+	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
+
+	if autoMoveEnabled then
+		startAutoUpgrade()
+	else
+		stopAutoUpgrade()
+		if circleThread then
+			circleThread:Disconnect()
+			circleThread = nil
+		end
+		if currentTween then
+			currentTween:Cancel()
+			currentTween = nil
+		end
+	end
+end)
+
+-- Main loop for moving and targeting mobs or touch parts
 task.spawn(function()
 	while true do
 		if autoMoveEnabled then
@@ -168,14 +214,5 @@ task.spawn(function()
 			end
 		end
 		task.wait(updateInterval)
-	end
-end)
-
--- Fire plrUpgrade every 5 seconds
-task.spawn(function()
-	while true do
-		local args = {3}
-		game:GetService("ReplicatedStorage"):WaitForChild("remotes"):WaitForChild("plrUpgrade"):FireServer(unpack(args))
-		task.wait(5)
 	end
 end)

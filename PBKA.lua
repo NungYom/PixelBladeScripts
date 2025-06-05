@@ -175,32 +175,23 @@ end
 
 local function moveToTarget(target)
 	if not target or not target:FindFirstChild("Humanoid") or target.Humanoid.Health <= 0 then return end
-	
-	if target.Name == "LumberJack" then
-		-- ไล่ตำแหน่งเป้าหมาย LumberJack แบบ real-time
-		while target.Humanoid.Health > 0 and autoMoveEnabled do
-			local offset = (HumanoidRootPart.Position - target.HumanoidRootPart.Position).Unit * 4
-			local goalPos = target.HumanoidRootPart.Position + offset
-			local goalCFrame = CFrame.new(goalPos, target.HumanoidRootPart.Position)
-			
-			walkTo(goalCFrame)
-			
-			-- รอจนกว่าจะถึงเป้าหมาย หรือต้องการอัพเดตตำแหน่งใหม่ทุก 0.3 วิ
-			local reached = false
-			while not reached and target.Humanoid.Health > 0 and autoMoveEnabled do
-				local distance = (HumanoidRootPart.Position - goalPos).Magnitude
-				if distance <= 5 then
-					reached = true
-				end
-				task.wait(0.3)
-			end
-		end
-	else
-		-- ปกติเดินไปตำแหน่งแรกแล้วรอ
+
+	while target.Humanoid.Health > 0 and autoMoveEnabled do
 		local offset = (HumanoidRootPart.Position - target.HumanoidRootPart.Position).Unit * 4
 		local goalPos = target.HumanoidRootPart.Position + offset
 		local goalCFrame = CFrame.new(goalPos, target.HumanoidRootPart.Position)
+
 		walkTo(goalCFrame)
+
+		-- รอจนถึงระยะใกล้พอ หรือเป้าหมายตาย หรือปิด autoMove
+		local reached = false
+		while not reached and target.Humanoid.Health > 0 and autoMoveEnabled do
+			local distance = (HumanoidRootPart.Position - goalPos).Magnitude
+			if distance <= 5 then
+				reached = true
+			end
+			task.wait(0.3)
+		end
 	end
 end
 

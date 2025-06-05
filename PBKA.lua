@@ -14,7 +14,7 @@ local scanRadius = 1500
 local baseCombatRange = 100
 local combatRange = baseCombatRange
 local updateInterval = 0.05
-local autoMoveEnabled = true
+local autoMoveEnabled = false
 local touchedParts = {}
 local lastTarget = nil
 
@@ -29,7 +29,7 @@ toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 toggleButton.Font = Enum.Font.GothamBold
 toggleButton.TextSize = 20
-toggleButton.Text = "AutoMove: ON"
+toggleButton.Text = "AutoMove: OFF"
 toggleButton.Parent = gui
 
 toggleButton.MouseButton1Click:Connect(function()
@@ -176,4 +176,4 @@ task.spawn(function()
 		end
 		task.wait(updateInterval)
 	end
-end) 
+end)

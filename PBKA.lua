@@ -228,4 +228,30 @@ local function moveToTarget(target)
 		while autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
 			local offset = (HumanoidRootPart.Position - target.HumanoidRootPart.Position).Unit * 4
 			local goalPos = target.HumanoidRootPart.Position + offset
-			local goalCFrame = CFrame
+			local goalCFrame = CFrame.new(goalPos)
+			walkTo(goalCFrame)
+			task.wait(updateInterval)
+		end
+	end)
+end
+
+RunService.Heartbeat:Connect(function()
+	if not autoMoveEnabled then return end
+
+	local targets = getAllNearbyTargets()
+	local targetData = targets[1]
+
+	if targetData and targetData.object then
+		local target = targetData.object
+		if lastTarget ~= target then
+			lastTarget = target
+			moveToTarget(target)
+		end
+	else
+		if currentTween then
+			currentTween:Cancel()
+			currentTween = nil
+		end
+		lastTarget = nil
+	end
+end)

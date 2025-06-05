@@ -8,13 +8,12 @@ local Humanoid = Character:WaitForChild("Humanoid")
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
 -- Settings
-local moveSpeed = 150
+local moveSpeed = 100
 local autoMoveEnabled = false
 local touchedParts = {}
 local visitedTargets = {}
 local lastTarget = nil
 local currentTween = nil
-local followConnection = nil
 
 -- GUI
 local gui = Instance.new("ScreenGui", PlayerGui)
@@ -35,47 +34,11 @@ toggleButton.MouseButton1Click:Connect(function()
 	toggleButton.Text = "AutoFarm: " .. (autoMoveEnabled and "ON" or "OFF")
 end)
 
--- Make character noclip
-local function makeCharacterNoClip(character)
-	for _, part in ipairs(character:GetDescendants()) do
-		if part:IsA("BasePart") then
-			part.CanCollide = false
-		end
-	end
-end
-
-makeCharacterNoClip(Character)
-LocalPlayer.CharacterAdded:Connect(function(newCharacter)
-	Character = newCharacter
-	Humanoid = Character:WaitForChild("Humanoid")
-	HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
-	makeCharacterNoClip(Character)
-end)
-
--- Filter folders
-local goblinArenaFolder = workspace:FindFirstChild("GoblinArena")
-local excludeFolders = {}
-if goblinArenaFolder then
-	excludeFolders = {
-		goblinArenaFolder:FindFirstChild("DrumGoblins"),
-		goblinArenaFolder:FindFirstChild("Goblins"),
-		goblinArenaFolder:FindFirstChild("introPositions")
-	}
-end
-
+-- Exclude by name only
 local excludedNames = {
 	["GoblinType1"] = true,
 	["GoblinType2"] = true
 }
-
-local function isInExcludedFolder(npc)
-	for _, folder in ipairs(excludeFolders) do
-		if folder and npc:IsDescendantOf(folder) then
-			return true
-		end
-	end
-	return false
-end
 
 local function isOnGround(part)
 	local raycastParams = RaycastParams.new()
@@ -95,7 +58,6 @@ local function getAllTargetsSortedByDistance()
 			and npc:FindFirstChild("HumanoidRootPart")
 			and npc.Humanoid.Health > 0
 			and not excludedNames[npc.Name]
-			and not isInExcludedFolder(npc)
 			and isOnGround(npc.HumanoidRootPart)
 			and not visitedTargets[npc] then
 
@@ -141,20 +103,14 @@ local function walkTo(targetCFrame)
 	currentTween:Play()
 end
 
-local function followTargetAtDistance(npc)
-	if followConnection then
-		followConnection:Disconnect()
-	end
-
-	followConnection = game:GetService("RunService").Heartbeat:Connect(function()
-		if not npc or not npc:FindFirstChild("HumanoidRootPart") or not npc:FindFirstChild("Humanoid") then return end
-		if npc.Humanoid.Health <= 0 or not autoMoveEnabled then return end
-
-		local offset = (HumanoidRootPart.Position - npc.HumanoidRootPart.Position).Unit * 4
-		local goalPos = npc.HumanoidRootPart.Position + offset
-		local goalCFrame = CFrame.new(goalPos, npc.HumanoidRootPart.Position)
+local function followMob(target)
+	while target and target:FindFirstChild("Humanoid") and target:FindFirstChild("HumanoidRootPart") and target.Humanoid.Health > 0 and autoMoveEnabled do
+		local direction = (HumanoidRootPart.Position - target.HumanoidRootPart.Position).Unit
+		local goalPosition = target.HumanoidRootPart.Position + direction * 4
+		local goalCFrame = CFrame.new(goalPosition, target.HumanoidRootPart.Position)
 		walkTo(goalCFrame)
-	end)
+		task.wait(0.2)
+	end
 end
 
 -- Main loop
@@ -165,19 +121,9 @@ local function mainLoop()
 			local selected = targets[1]
 			if selected then
 				if selected.type == "mob" then
-					if selected.object ~= lastTarget then
+					if selected.object ~= lastTarget and selected.object:FindFirstChild("Humanoid") then
 						lastTarget = selected.object
-						followTargetAtDistance(selected.object)
-
-						repeat
-							task.wait(0.2)
-						until selected.object.Humanoid.Health <= 0 or not autoMoveEnabled
-
-						if followConnection then
-							followConnection:Disconnect()
-							followConnection = nil
-						end
-
+						followMob(selected.object)
 						visitedTargets[selected.object] = true
 						lastTarget = nil
 					end

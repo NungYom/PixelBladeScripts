@@ -1,5 +1,3 @@
--- AutoMove with Circle Strafe & Optimized Performance
-
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
@@ -13,7 +11,7 @@ local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 -- Settings
 local moveSpeed = 100
 local scanRadius = 1500
-local combatRange = 1500
+local combatRange = 400
 local updateInterval = 0.05
 local autoMoveEnabled = false
 local touchedParts = {}
@@ -37,24 +35,6 @@ toggleButton.MouseButton1Click:Connect(function()
 	autoMoveEnabled = not autoMoveEnabled
 	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
 end)
-
--- Always disable collision and stay floating
-RunService.Stepped:Connect(function()
-	if autoMoveEnabled and Character then
-		for _, part in pairs(Character:GetDescendants()) do
-			if part:IsA("BasePart") then
-				part.CanCollide = false
-			end
-		end
-		-- Float
-		HumanoidRootPart.Velocity = Vector3.new(0, 1, 0)
-	end
-end)
-
--- Performance Optimization
-settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
-settings().Rendering.TextureQuality = Enum.TextureQuality.Low
-settings().Rendering.EditQualityLevel = Enum.QualityLevel.Level01
 
 -- Filter folders
 local goblinArenaFolder = workspace:FindFirstChild("GoblinArena")
@@ -81,6 +61,14 @@ local function isInExcludedFolder(npc)
 	return false
 end
 
+local function isOnGround(part)
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+	raycastParams.FilterDescendantsInstances = {part.Parent}
+	local ray = workspace:Raycast(part.Position, Vector3.new(0, -10, 0), raycastParams)
+	return ray ~= nil
+end
+
 local function getNearestMobInRange(maxDistance)
 	local nearestMob = nil
 	local shortestDistance = math.huge
@@ -92,7 +80,8 @@ local function getNearestMobInRange(maxDistance)
 			and npc:FindFirstChild("HumanoidRootPart")
 			and npc.Humanoid.Health > 0
 			and not excludedNames[npc.Name]
-			and not isInExcludedFolder(npc) then
+			and not isInExcludedFolder(npc)
+			and isOnGround(npc.HumanoidRootPart) then
 
 			local dist = (HumanoidRootPart.Position - npc.HumanoidRootPart.Position).Magnitude
 			if dist < maxDistance and dist < shortestDistance then
@@ -111,7 +100,7 @@ local function getNearestUntouchedTouchPart()
 
 	for _, part in pairs(workspace:GetDescendants()) do
 		if part:IsA("BasePart")
-			and string.lower(part.Name):match("touch")
+			and part.Name:lower() == "touch"
 			and not touchedParts[part] then
 
 			local dist = (HumanoidRootPart.Position - part.Position).Magnitude
@@ -131,6 +120,7 @@ local function walkTo(targetCFrame)
 
 	local distance = (HumanoidRootPart.Position - targetCFrame.Position).Magnitude
 	local travelTime = distance / moveSpeed
+
 	local tweenInfo = TweenInfo.new(travelTime, Enum.EasingStyle.Linear)
 	currentTween = TweenService:Create(HumanoidRootPart, tweenInfo, {
 		CFrame = targetCFrame
@@ -138,14 +128,14 @@ local function walkTo(targetCFrame)
 	currentTween:Play()
 end
 
--- Circle Strafe
+-- Move around target in a smooth circle
 local function circleAroundTarget(target)
 	task.spawn(function()
-		local radius = 4
 		local angle = 0
+		local radius = 4
 		while autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
-			angle += math.rad(5)
-			local offset = Vector3.new(math.cos(angle), 0, math.sin(angle)) * radius
+			angle += math.rad(3)
+			local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
 			local goalPos = target.HumanoidRootPart.Position + offset
 			local goalCFrame = CFrame.new(goalPos, target.HumanoidRootPart.Position)
 			walkTo(goalCFrame)
@@ -154,7 +144,7 @@ local function circleAroundTarget(target)
 	end)
 end
 
--- Main Loop
+-- Main loop
 task.spawn(function()
 	while true do
 		if autoMoveEnabled then
@@ -171,6 +161,7 @@ task.spawn(function()
 				if touchPart then
 					touchedParts[touchPart] = true
 					walkTo(touchPart.CFrame)
+					task.wait(1.5)
 				end
 			end
 		end

@@ -12,6 +12,7 @@ local scanRadius = 1500
 local combatRange = 400
 local updateInterval = 0.75
 local autoMoveEnabled = false
+local isHealing = false
 
 -- GUI
 local gui = Instance.new("ScreenGui", PlayerGui)
@@ -139,7 +140,8 @@ end
 -- ตรวจ HP หากต่ำกว่า 20% ให้ตก void แล้วรอจน HP เต็ม
 function monitorHealth()
 	while autoMoveEnabled do
-		if Humanoid.Health / Humanoid.MaxHealth < 0.2 then
+		if not isHealing and (Humanoid.Health / Humanoid.MaxHealth < 0.2) then
+			isHealing = true
 			local currentPos = HumanoidRootPart.Position
 			local voidPos = Vector3.new(currentPos.X, currentPos.Y - 1000, currentPos.Z)
 			HumanoidRootPart.CFrame = CFrame.new(voidPos)
@@ -148,6 +150,7 @@ function monitorHealth()
 			-- รอให้ HP รีเซ็ต
 			repeat task.wait(0.25) until Humanoid.Health >= Humanoid.MaxHealth - 1
 			warn("HP restored after void.")
+			isHealing = false
 		end
 		task.wait(0.5)
 	end
@@ -156,7 +159,7 @@ end
 -- ลูปหลัก
 task.spawn(function()
 	while true do
-		if autoMoveEnabled then
+		if autoMoveEnabled and not isHealing then
 			local mob = getNearestMobInRange(combatRange)
 			if mob then
 				walkTo(mob.HumanoidRootPart.CFrame)

@@ -37,22 +37,27 @@ toggleButton.MouseButton1Click:Connect(function()
 	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
 end)
 
--- HP Button
-local hpButton = Instance.new("TextButton")
-hpButton.Size = UDim2.new(0, 200, 0, 50)
-hpButton.Position = UDim2.new(0, 20, 0, 80)
-hpButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-hpButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-hpButton.Font = Enum.Font.GothamBold
-hpButton.TextSize = 20
-hpButton.Text = "Check %HP"
-hpButton.Parent = gui
+-- Small HP Label
+local hpLabel = Instance.new("TextLabel")
+hpLabel.Size = UDim2.new(0, 200, 0, 20)
+hpLabel.Position = UDim2.new(0, 20, 0, 70)
+hpLabel.BackgroundTransparency = 1
+hpLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+hpLabel.Font = Enum.Font.Gotham
+hpLabel.TextSize = 14
+hpLabel.Text = ""
+hpLabel.Parent = gui
 
-hpButton.MouseButton1Click:Connect(function()
-	local hp = Humanoid.Health
-	local maxHp = Humanoid.MaxHealth
-	local percent = math.floor((hp / maxHp) * 100)
-	game.ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(tostring(percent).."% HP", "All")
+-- Update HP % regularly
+task.spawn(function()
+	while true do
+		local hp = Humanoid.Health
+		local maxHp = Humanoid.MaxHealth
+		if maxHp > 0 then
+			hpLabel.Text = math.floor((hp / maxHp) * 100) .. "% HP"
+		end
+		task.wait(0.5)
+	end
 end)
 
 -- Filter folders

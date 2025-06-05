@@ -71,10 +71,28 @@ local function isOnGround(part)
 	return ray ~= nil
 end
 
+-- เช็คมอนที่มี behavior (AI) คือเคลื่อนไหวหรือมี Script
+local function isRealMob(npc)
+	local hrp = npc:FindFirstChild("HumanoidRootPart")
+	if not hrp then return false end
+
+	local isMoving = hrp.Velocity.Magnitude > 0.1
+	local hasScripts = npc:FindFirstChildOfClass("Script") or npc:FindFirstChildOfClass("ModuleScript")
+
+	return isMoving or hasScripts
+end
+
 local function getAllNearbyTargets(maxDistance)
-	local targets = {}
-	local worldSpawn = workspace:FindFirstChild("SpawnLocation") or Instance.new("Part")
-	worldSpawn.Position = Vector3.new(0, 0, 0)
+	local realMobs = {}
+	local fakeMobs = {}
+	local touches = {}
+
+	local worldSpawn = workspace:FindFirstChild("SpawnLocation")
+	if not worldSpawn then
+		worldSpawn = Instance.new("Part")
+		worldSpawn.Position = Vector3.new(0, 0, 0)
+	end
+	local spawnPos = worldSpawn.Position
 
 	for _, npc in pairs(workspace:GetDescendants()) do
 		if npc:IsA("Model")
@@ -86,11 +104,14 @@ local function getAllNearbyTargets(maxDistance)
 			and not isInExcludedFolder(npc)
 			and isOnGround(npc.HumanoidRootPart) then
 
-			table.insert(targets, {
-				type = "mob",
-				object = npc,
-				distance = (worldSpawn.Position - npc.HumanoidRootPart.Position).Magnitude
-			})
+			local dist = (spawnPos - npc.HumanoidRootPart.Position).Magnitude
+			if dist <= maxDistance then
+				if isRealMob(npc) then
+					table.insert(realMobs, {type = "realmob", object = npc, distance = dist})
+				else
+					table.insert(fakeMobs, {type = "fakemob", object = npc, distance = dist})
+				end
+			end
 		end
 	end
 
@@ -99,19 +120,35 @@ local function getAllNearbyTargets(maxDistance)
 			and part.Name:lower() == "touch"
 			and not touchedParts[part] then
 
-			table.insert(targets, {
-				type = "touch",
-				object = part,
-				distance = (worldSpawn.Position - part.Position).Magnitude
-			})
+			local dist = (spawnPos - part.Position).Magnitude
+			if dist <= maxDistance then
+				table.insert(touches, {type = "touch", object = part, distance = dist})
+			end
 		end
 	end
 
-	table.sort(targets, function(a, b)
+	-- 1. มอนที่มี behavior (realMobs) เรียงจากไกล → ใกล้
+	table.sort(realMobs, function(a, b)
+		return a.distance > b.distance -- มากไปน้อย
+	end)
+
+	-- 2. มอนที่ไม่มี behavior (fakeMobs) เรียงจากใกล้ → ไกล
+	table.sort(fakeMobs, function(a, b)
+		return a.distance < b.distance -- น้อยไปมาก
+	end)
+
+	-- 3. touch เรียงจากใกล้ → ไกล
+	table.sort(touches, function(a, b)
 		return a.distance < b.distance
 	end)
 
-	return targets
+	-- รวมลิสต์ตามลำดับที่ต้องการ
+	local combined = {}
+	for _, v in ipairs(realMobs) do table.insert(combined, v) end
+	for _, v in ipairs(fakeMobs) do table.insert(combined, v) end
+	for _, v in ipairs(touches) do table.insert(combined, v) end
+
+	return combined
 end
 
 local function walkTo(targetCFrame)
@@ -147,7 +184,7 @@ task.spawn(function()
 			local targets = getAllNearbyTargets(scanRadius)
 			local selected = targets[1]
 			if selected then
-				if selected.type == "mob" then
+				if selected.type == "realmob" or selected.type == "fakemob" then
 					if selected.object ~= lastTarget then
 						lastTarget = selected.object
 						moveToTarget(selected.object)

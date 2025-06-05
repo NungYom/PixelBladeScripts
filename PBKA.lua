@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
@@ -13,11 +14,7 @@ local scanRadius = 1500
 local combatRange = 400
 local updateInterval = 0.1
 local autoMoveEnabled = false
-local orbiting = false
 local orbitRadius = 4
-local orbitConnection
-local isHealing = false -- สถานะฟื้นฟูเลือด
-local targetTimeout = 3 -- วินาทีที่ให้ตามเป้าหมายเดิมก่อนเปลี่ยน
 
 -- GUI
 local gui = Instance.new("ScreenGui", PlayerGui)
@@ -33,41 +30,14 @@ toggleButton.TextSize = 20
 toggleButton.Text = "AutoMove: OFF"
 toggleButton.Parent = gui
 
--- noclip setup
-local noclipConnection
-
-local function setNoclip(enabled)
-	if enabled then
-		if noclipConnection then return end -- ถ้ามีแล้วไม่ต้องทำซ้ำ
-		noclipConnection = RunService.Stepped:Connect(function()
-			if Character and Character.Parent then
-				for _, part in pairs(Character:GetChildren()) do
-					if part:IsA("BasePart") and part.CanCollide == true then
-						part.CanCollide = false
-					end
-				end
-			end
-		end)
-	else
-		if noclipConnection then
-			noclipConnection:Disconnect()
-			noclipConnection = nil
-		end
-		-- เปิดการชนให้ปกติเมื่อปิด noclip
-		if Character and Character.Parent then
-			for _, part in pairs(Character:GetChildren()) do
-				if part:IsA("BasePart") then
-					part.CanCollide = true
-				end
-			end
-		end
-	end
-end
-
 toggleButton.MouseButton1Click:Connect(function()
 	autoMoveEnabled = not autoMoveEnabled
 	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
-	setNoclip(autoMoveEnabled)
+	if autoMoveEnabled then
+		setNoclip(true)
+	else
+		setNoclip(false)
+	end
 end)
 
 -- โฟลเดอร์ใน GoblinArena ที่ต้องกรอง
@@ -82,11 +52,6 @@ if goblinArenaFolder then
 	}
 end
 
-local excludedNames = {
-	["GoblinType1"] = true,
-	["GoblinType2"] = true
-}
-
 -- ฟังก์ชันตรวจสอบว่า NPC อยู่ในโฟลเดอร์ที่ต้องกรองหรือไม่
 local function isInExcludedFolder(npc)
 	for _, folder in ipairs(excludeFolders) do
@@ -97,7 +62,25 @@ local function isInExcludedFolder(npc)
 	return false
 end
 
--- หา mob ที่ใกล้ที่สุด (เฉพาะ mob ที่ไม่ใช่ผู้เล่น)
+-- รายชื่อ NPC ที่ไม่ต้องไล่ตาม (ผู้เล่น)
+local excludedNames = {
+	["GoblinType1"] = true,
+	["GoblinType2"] = true
+}
+
+local function isPlayerModel(model)
+	if not model then return false end
+	if model:FindFirstChildOfClass("Humanoid") and model:FindFirstChild("HumanoidRootPart") then
+		for _, player in pairs(Players:GetPlayers()) do
+			if player.Character == model then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- ฟังก์ชันหา mob ที่ใกล้ที่สุดภายในระยะที่กำหนด (ไม่ใช่ผู้เล่น)
 local function getNearestMobInRange(maxDistance)
 	local nearestMob = nil
 	local shortestDistance = math.huge
@@ -109,16 +92,13 @@ local function getNearestMobInRange(maxDistance)
 			and npc:FindFirstChild("HumanoidRootPart")
 			and npc.Humanoid.Health > 0
 			and not excludedNames[npc.Name]
-			and not isInExcludedFolder(npc) then
+			and not isInExcludedFolder(npc)
+			and not isPlayerModel(npc) then
 
-			-- ไม่ใช่ผู้เล่นอื่น
-			local isPlayerModel = Players:GetPlayerFromCharacter(npc) ~= nil
-			if not isPlayerModel then
-				local dist = (HumanoidRootPart.Position - npc.HumanoidRootPart.Position).Magnitude
-				if dist < maxDistance and dist < shortestDistance then
-					shortestDistance = dist
-					nearestMob = npc
-				end
+			local dist = (HumanoidRootPart.Position - npc.HumanoidRootPart.Position).Magnitude
+			if dist < maxDistance and dist < shortestDistance then
+				shortestDistance = dist
+				nearestMob = npc
 			end
 		end
 	end
@@ -126,9 +106,10 @@ local function getNearestMobInRange(maxDistance)
 	return nearestMob
 end
 
--- เก็บ touch parts ที่เคยไปแล้ว
+-- จำแคมป์ไฟที่เคยสัมผัสแล้ว
 local touchedParts = {}
 
+-- หา touch part ที่ยังไม่เคยไป
 local function getNearestUntouchedTouchPart()
 	local nearestPart = nil
 	local shortestDistance = math.huge
@@ -149,86 +130,131 @@ local function getNearestUntouchedTouchPart()
 	return nearestPart
 end
 
--- ตัวแปร tween ปัจจุบัน
+-- Tween ไปหา (ห่างเป้าหมาย 2 studs)
 local currentTween
 
--- ฟังก์ชันเดินไปหาเป้าหมายโดยเว้นระยะ 4 studs
 local function walkTo(targetCFrame)
 	if currentTween then currentTween:Cancel() end
 
-	local targetPos = targetCFrame.Position
-	local direction = (HumanoidRootPart.Position - targetPos).Unit
-	local offsetPos = targetPos + direction * 4 -- เว้นระยะ 4 studs ออกมา
-
-	local distance = (HumanoidRootPart.Position - offsetPos).Magnitude
+	local offsetCFrame = targetCFrame * CFrame.new(0, 0, -2)
+	local distance = (HumanoidRootPart.Position - offsetCFrame.Position).Magnitude
 	local travelTime = distance / moveSpeed
 
 	local tweenInfo = TweenInfo.new(travelTime, Enum.EasingStyle.Linear)
 	local tween = TweenService:Create(HumanoidRootPart, tweenInfo, {
-		CFrame = CFrame.new(offsetPos.X, offsetPos.Y, offsetPos.Z)
+		CFrame = offsetCFrame
 	})
 	currentTween = tween
 	tween:Play()
 end
 
--- ฟังก์ชันให้ตัวละครเคลื่อนที่เป็นวงกลมรอบ mob รัศมี 4 studs
+-- Noclip
+local noclipConnection
+local function setNoclip(enable)
+	if noclipConnection then
+		noclipConnection:Disconnect()
+		noclipConnection = nil
+	end
+
+	if enable then
+		noclipConnection = RunService.Stepped:Connect(function()
+			for _, part in pairs(Character:GetChildren()) do
+				if part:IsA("BasePart") then
+					part.CanCollide = false
+				end
+			end
+		end)
+	else
+		for _, part in pairs(Character:GetChildren()) do
+			if part:IsA("BasePart") then
+				part.CanCollide = true
+			end
+		end
+	end
+end
+
+-- Orbit รอบ mob ด้วย TweenService เร็วและลื่นกว่า
+local orbiting = false
+local orbitTween
+
 local function orbitAround(target)
-	if orbiting or not target or isHealing then return end
+	if orbiting or not target or not target:FindFirstChild("HumanoidRootPart") then return end
+	if target.Humanoid.Health <= 0 then return end
+
 	orbiting = true
 
+	if orbitTween then
+		orbitTween:Disconnect()
+		orbitTween = nil
+	end
+
 	local angle = 0
-	orbitConnection = RunService.RenderStepped:Connect(function(dt)
-		if not autoMoveEnabled or not target or not target:FindFirstChild("HumanoidRootPart") or target:FindFirstChild("Humanoid").Health <= 0 or isHealing then
+
+	orbitTween = RunService.RenderStepped:Connect(function(dt)
+		if not autoMoveEnabled
+			or not target
+			or not target:FindFirstChild("HumanoidRootPart")
+			or target.Humanoid.Health <= 0 then
 			orbiting = false
-			if orbitConnection then orbitConnection:Disconnect() end
+			if orbitTween then
+				orbitTween:Disconnect()
+				orbitTween = nil
+			end
 			return
 		end
 
-		angle = angle + dt * 2 -- ความเร็วในการหมุน
+		angle = angle + dt * 5 -- ความเร็วการหมุน ปรับได้
 		local offset = Vector3.new(math.cos(angle), 0, math.sin(angle)) * orbitRadius
 		local targetPos = target.HumanoidRootPart.Position + offset
-		Humanoid:MoveTo(targetPos)
+
+		if currentTween then currentTween:Cancel() end
+		local distance = (HumanoidRootPart.Position - targetPos).Magnitude
+		local travelTime = distance / moveSpeed
+
+		local tweenInfo = TweenInfo.new(travelTime, Enum.EasingStyle.Linear)
+		local tween = TweenService:Create(HumanoidRootPart, tweenInfo, {
+			CFrame = CFrame.new(targetPos.X, targetPos.Y, targetPos.Z)
+		})
+		currentTween = tween
+		tween:Play()
 	end)
 end
 
--- ตรวจจับ HP ต่ำกว่า 20% แล้วเทเลพอร์ตลง void เพื่อฟื้นฟูเลือด
-task.spawn(function()
-	while true do
-		if autoMoveEnabled and not isHealing and Humanoid.Health > 0 then
-			if Humanoid.Health / Humanoid.MaxHealth < 0.2 then
-				isHealing = true
-
-				-- ยกเลิก tween และวงโคจร
-				if currentTween then currentTween:Cancel() end
-				if orbitConnection then orbitConnection:Disconnect() end
-				orbiting = false
-
-				local currentPos = HumanoidRootPart.Position
-				local targetPos = Vector3.new(currentPos.X, currentPos.Y - 1000, currentPos.Z)
-
-				-- เทเลพอร์ตลง void
-				HumanoidRootPart.CFrame = CFrame.new(targetPos)
-
-				-- รอเลือดฟื้น (เกมฟื้นเลือดเอง)
-				task.wait(3)
-
-				isHealing = false
-			end
+-- Teleport ลง void เมื่อตัวละคร hp ต่ำกว่า 20%
+local isHealing = false
+local function checkHPAndTeleportVoid()
+	if Humanoid.Health / Humanoid.MaxHealth < 0.2 then
+		isHealing = true
+		if currentTween then currentTween:Cancel() end
+		if orbitTween then
+			orbitTween:Disconnect()
+			orbitTween = nil
 		end
-		task.wait(0.25)
-	end
-end)
 
--- ลูปหลักควบคุมการเดินหา mob และ touch parts
+		local currentPos = HumanoidRootPart.Position
+		local voidPos = Vector3.new(currentPos.X, currentPos.Y - 1000, currentPos.Z)
+		-- เทเลพอร์ตไป void
+		Character:SetPrimaryPartCFrame(CFrame.new(voidPos))
+		task.wait(0.5) -- รอให้เลือดฟื้น
+		isHealing = false
+	end
+end
+
+-- ระบบเปลี่ยนเป้าหมายถ้าตามเกิน 3 วิ
+local currentTarget = nil
+local targetStartTime = 0
+local targetTimeout = 3
+
+-- ลูปหลัก
 task.spawn(function()
-	local currentTarget = nil
-	local targetStartTime = 0
 	while true do
 		if autoMoveEnabled and not isHealing then
+			checkHPAndTeleportVoid()
+
+			-- หา mob ตัวใหม่หาก timeout หรือไม่มีเป้าหมาย
 			local mob = nil
 
-			if currentTarget and currentTarget:FindFirstChild("Humanoid") and currentTarget.Humanoid.Health > 0 then
-				-- ถ้าเป้าหมายเดิมยังมีชีวิตอยู่และไม่ timeout
+			if currentTarget and currentTarget.Humanoid and currentTarget.Humanoid.Health > 0 then
 				if os.clock() - targetStartTime < targetTimeout then
 					mob = currentTarget
 				else
@@ -254,6 +280,8 @@ task.spawn(function()
 					task.wait(1)
 				end
 			end
+		else
+			task.wait(0.1)
 		end
 		task.wait(updateInterval)
 	end

@@ -10,7 +10,7 @@ local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
 -- Settings
 local moveSpeed = 100
-local scanRadius = 1500
+local scanRadius = 400
 local baseCombatRange = 100
 local combatRange = baseCombatRange
 local updateInterval = 0.05
@@ -133,15 +133,6 @@ end
 local function moveToTarget(target)
 	task.spawn(function()
 		while autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
-			local touchPart = getNearestUntouchedTouchPart()
-			if touchPart then
-				touchedParts[touchPart] = true
-				walkTo(touchPart.CFrame)
-				task.wait(3)
-				lastTarget = nil
-				return
-			end
-
 			local offset = (HumanoidRootPart.Position - target.HumanoidRootPart.Position).Unit * 4
 			local goalPos = target.HumanoidRootPart.Position + offset
 			local goalCFrame = CFrame.new(goalPos, target.HumanoidRootPart.Position)
@@ -152,30 +143,32 @@ local function moveToTarget(target)
 end
 
 -- Main loop
+local checkedTouchThisCycle = false
+
 task.spawn(function()
 	while true do
 		if autoMoveEnabled then
-			local touchPart = getNearestUntouchedTouchPart()
-			if touchPart then
-				touchedParts[touchPart] = true
-				walkTo(touchPart.CFrame)
-				task.wait(3)
-				lastTarget = nil
-			else
-				combatRange = baseCombatRange
-				local mob = nil
-
-				while not mob and combatRange <= scanRadius do
-					mob = getNearestMobInRange(combatRange)
-					if not mob then
-						combatRange += 100
-					end
+			-- 1. Attack nearest mob
+			local mob = getNearestMobInRange(scanRadius)
+			if mob then
+				if mob ~= lastTarget then
+					lastTarget = mob
+					moveToTarget(mob)
 				end
-
-				if mob then
-					if mob ~= lastTarget then
-						lastTarget = mob
-						moveToTarget(mob)
+			else
+				-- 2. Go to nearest touch part
+				local touchPart = getNearestUntouchedTouchPart()
+				if touchPart then
+					touchedParts[touchPart] = true
+					walkTo(touchPart.CFrame)
+					task.wait(3)
+					lastTarget = nil
+				else
+					-- 3. Fallback: any mob in range
+					local fallbackMob = getNearestMobInRange(scanRadius)
+					if fallbackMob and fallbackMob ~= lastTarget then
+						lastTarget = fallbackMob
+						moveToTarget(fallbackMob)
 					end
 				end
 			end

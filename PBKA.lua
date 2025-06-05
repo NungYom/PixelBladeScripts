@@ -1,7 +1,8 @@
+-- AutoMove with Circle Strafe & Optimized Performance
+
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
-local Lighting = game:GetService("Lighting")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -12,7 +13,7 @@ local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 -- Settings
 local moveSpeed = 100
 local scanRadius = 1500
-local combatRange = 400
+local combatRange = 1500
 local updateInterval = 0.05
 local autoMoveEnabled = false
 local touchedParts = {}
@@ -37,31 +38,23 @@ toggleButton.MouseButton1Click:Connect(function()
 	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
 end)
 
--- Performance boost: minimize visuals
-Lighting.GlobalShadows = false
-Lighting.FogEnd = 1000000
-for _, v in ipairs(workspace:GetDescendants()) do
-	if v:IsA("BasePart") then
-		v.Material = Enum.Material.SmoothPlastic
-		v.CastShadow = false
-	end
-	if v:IsA("ParticleEmitter") or v:IsA("Trail") then
-		v.Enabled = false
-	end
-end
--- Noclip & Floating (เพื่อไม่ให้กระตุกขึ้นลง)
+-- Always disable collision and stay floating
 RunService.Stepped:Connect(function()
-	if autoMoveEnabled and Character and Character:FindFirstChildOfClass("Humanoid") then
+	if autoMoveEnabled and Character then
 		for _, part in pairs(Character:GetDescendants()) do
 			if part:IsA("BasePart") then
 				part.CanCollide = false
-				part.Anchored = false
 			end
 		end
-		Humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-		HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
+		-- Float
+		HumanoidRootPart.Velocity = Vector3.new(0, 1, 0)
 	end
 end)
+
+-- Performance Optimization
+settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+settings().Rendering.TextureQuality = Enum.TextureQuality.Low
+settings().Rendering.EditQualityLevel = Enum.QualityLevel.Level01
 
 -- Filter folders
 local goblinArenaFolder = workspace:FindFirstChild("GoblinArena")
@@ -112,13 +105,32 @@ local function getNearestMobInRange(maxDistance)
 	return nearestMob
 end
 
+local function getNearestUntouchedTouchPart()
+	local nearestPart = nil
+	local shortestDistance = math.huge
+
+	for _, part in pairs(workspace:GetDescendants()) do
+		if part:IsA("BasePart")
+			and string.lower(part.Name):match("touch")
+			and not touchedParts[part] then
+
+			local dist = (HumanoidRootPart.Position - part.Position).Magnitude
+			if dist < scanRadius and dist < shortestDistance then
+				shortestDistance = dist
+				nearestPart = part
+			end
+		end
+	end
+
+	return nearestPart
+end
+
 local currentTween
 local function walkTo(targetCFrame)
 	if currentTween then currentTween:Cancel() end
 
 	local distance = (HumanoidRootPart.Position - targetCFrame.Position).Magnitude
 	local travelTime = distance / moveSpeed
-
 	local tweenInfo = TweenInfo.new(travelTime, Enum.EasingStyle.Linear)
 	currentTween = TweenService:Create(HumanoidRootPart, tweenInfo, {
 		CFrame = targetCFrame
@@ -126,15 +138,14 @@ local function walkTo(targetCFrame)
 	currentTween:Play()
 end
 
--- Smooth circle strafing
+-- Circle Strafe
 local function circleAroundTarget(target)
 	task.spawn(function()
+		local radius = 4
 		local angle = 0
 		while autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
-			local radius = 4
-			angle += math.rad(2)
-			if angle > math.pi * 2 then angle = 0 end
-			local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
+			angle += math.rad(5)
+			local offset = Vector3.new(math.cos(angle), 0, math.sin(angle)) * radius
 			local goalPos = target.HumanoidRootPart.Position + offset
 			local goalCFrame = CFrame.new(goalPos, target.HumanoidRootPart.Position)
 			walkTo(goalCFrame)
@@ -142,26 +153,8 @@ local function circleAroundTarget(target)
 		end
 	end)
 end
--- ปิดเอฟเฟกต์เพื่อเพิ่มเฟรมเรต โดยไม่ยุ่งกับ Texture/Decal ของเกม
-task.spawn(function()
-	while true do
-		for _, obj in pairs(workspace:GetDescendants()) do
-			if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") then
-				obj.Enabled = false
-			elseif obj:IsA("Light") then
-				obj.Enabled = false
-			end
-		end
-		-- ลดคุณภาพกราฟิกจากฝั่งผู้เล่นโดยไม่ทำลายองค์ประกอบของเกม
-		pcall(function()
-			settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
-			UserSettings():GetService("UserGameSettings").SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1
-		end)
-		task.wait(2)
-	end
-end)
 
--- Main loop
+-- Main Loop
 task.spawn(function()
 	while true do
 		if autoMoveEnabled then
@@ -172,6 +165,12 @@ task.spawn(function()
 					local offsetCFrame = mob.HumanoidRootPart.CFrame * CFrame.new(0, 0, -4)
 					walkTo(offsetCFrame)
 					circleAroundTarget(mob)
+				end
+			else
+				local touchPart = getNearestUntouchedTouchPart()
+				if touchPart then
+					touchedParts[touchPart] = true
+					walkTo(touchPart.CFrame)
 				end
 			end
 		end

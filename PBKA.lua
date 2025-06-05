@@ -15,9 +15,6 @@ local visitedTargets = {}
 local lastTarget = nil
 local currentTween = nil
 
--- Mark original spawn point
-local originalSpawnPosition = HumanoidRootPart.Position
-
 -- GUI
 local gui = Instance.new("ScreenGui", PlayerGui)
 gui.Name = "AutoMoveGUI"
@@ -70,7 +67,7 @@ local function isOnGround(part)
 	return ray ~= nil
 end
 
-local function getAllTargetsSortedBySpawn()
+local function getAllTargetsSortedByDistance()
 	local targets = {}
 
 	for _, npc in pairs(workspace:GetDescendants()) do
@@ -87,7 +84,7 @@ local function getAllTargetsSortedBySpawn()
 			table.insert(targets, {
 				type = "mob",
 				object = npc,
-				distance = (originalSpawnPosition - npc.HumanoidRootPart.Position).Magnitude
+				distance = (HumanoidRootPart.Position - npc.HumanoidRootPart.Position).Magnitude
 			})
 		end
 	end
@@ -101,7 +98,7 @@ local function getAllTargetsSortedBySpawn()
 			table.insert(targets, {
 				type = "touch",
 				object = part,
-				distance = (originalSpawnPosition - part.Position).Magnitude
+				distance = (HumanoidRootPart.Position - part.Position).Magnitude
 			})
 		end
 	end
@@ -127,22 +124,18 @@ local function walkTo(targetCFrame)
 end
 
 local function moveToTarget(target)
-	task.spawn(function()
-		while autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
-			local offset = (HumanoidRootPart.Position - target.HumanoidRootPart.Position).Unit * 4
-			local goalPos = target.HumanoidRootPart.Position + offset
-			local goalCFrame = CFrame.new(goalPos, target.HumanoidRootPart.Position)
-			walkTo(goalCFrame)
-			task.wait(0.05)
-		end
-	end)
+	if not target or not target:FindFirstChild("Humanoid") or target.Humanoid.Health <= 0 then return end
+	local offset = (HumanoidRootPart.Position - target.HumanoidRootPart.Position).Unit * 4
+	local goalPos = target.HumanoidRootPart.Position + offset
+	local goalCFrame = CFrame.new(goalPos, target.HumanoidRootPart.Position)
+	walkTo(goalCFrame)
 end
 
--- Main loop with reduced frequency
+-- Main loop
 local function mainLoop()
 	while true do
 		if autoMoveEnabled then
-			local targets = getAllTargetsSortedBySpawn()
+			local targets = getAllTargetsSortedByDistance()
 			local selected = targets[1]
 			if selected then
 				visitedTargets[selected.object] = true

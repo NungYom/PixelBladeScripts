@@ -33,9 +33,29 @@ toggleButton.TextSize = 20
 toggleButton.Text = "AutoMove: OFF"
 toggleButton.Parent = gui
 
+-- ฟังก์ชันเปิด/ปิด noclip
+local noclipEnabled = false
+local function setNoclip(enabled)
+	noclipEnabled = enabled
+end
+
+local function noclipLoop()
+	RunService.Stepped:Connect(function()
+		if noclipEnabled and Character then
+			for _, part in pairs(Character:GetChildren()) do
+				if part:IsA("BasePart") and part.CanCollide == true then
+					part.CanCollide = false
+				end
+			end
+		end
+	end)
+end
+noclipLoop()
+
 toggleButton.MouseButton1Click:Connect(function()
 	autoMoveEnabled = not autoMoveEnabled
 	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
+	setNoclip(autoMoveEnabled)
 end)
 
 -- โฟลเดอร์ใน GoblinArena ที่ต้องกรอง

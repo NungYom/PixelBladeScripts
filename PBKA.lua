@@ -69,11 +69,23 @@ local function isOnGround(part)
 	return ray ~= nil
 end
 
+-- Cache Descendants every 1.5 seconds to reduce load
+local allMobs = {}
+local allTouchParts = {}
+
+task.spawn(function()
+	while true do
+		allMobs = workspace:GetDescendants()
+		allTouchParts = workspace:GetDescendants()
+		task.wait(1.5)
+	end
+end)
+
 local function getNearestMobInRange(maxDistance)
 	local nearestMob = nil
 	local shortestDistance = math.huge
 
-	for _, npc in pairs(workspace:GetDescendants()) do
+	for _, npc in pairs(allMobs) do
 		if npc:IsA("Model")
 			and npc ~= Character
 			and npc:FindFirstChild("Humanoid")
@@ -98,7 +110,7 @@ local function getNearestUntouchedTouchPart()
 	local nearestPart = nil
 	local shortestDistance = math.huge
 
-	for _, part in pairs(workspace:GetDescendants()) do
+	for _, part in pairs(allTouchParts) do
 		if part:IsA("BasePart")
 			and part.Name:lower() == "touch"
 			and not touchedParts[part] then
@@ -115,7 +127,12 @@ local function getNearestUntouchedTouchPart()
 end
 
 local currentTween
+local tweenCooldown = false
+
 local function walkTo(targetCFrame)
+	if tweenCooldown then return end
+	tweenCooldown = true
+
 	if currentTween then currentTween:Cancel() end
 
 	local distance = (HumanoidRootPart.Position - targetCFrame.Position).Magnitude
@@ -126,19 +143,23 @@ local function walkTo(targetCFrame)
 		CFrame = targetCFrame
 	})
 	currentTween:Play()
+
+	task.delay(travelTime * 0.8, function()
+		tweenCooldown = false
+	end)
 end
 
--- Circle around the target at 20 studs
+-- Circle around the target at 20 studs smoothly, update every 0.3s
 local function circleAroundTarget(target)
 	task.spawn(function()
 		while autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
-			local angle = tick() % 6.28
+			local angle = tick() * 0.8
 			local radius = 20
 			local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
 			local goalPos = target.HumanoidRootPart.Position + offset
 			local goalCFrame = CFrame.new(goalPos, target.HumanoidRootPart.Position)
 			walkTo(goalCFrame)
-			task.wait(0.05)
+			task.wait(0.3)
 		end
 	end)
 end
@@ -163,5 +184,14 @@ task.spawn(function()
 			end
 		end
 		task.wait(updateInterval)
+	end
+end)
+
+-- Fire plrUpgrade every 5 seconds
+task.spawn(function()
+	while true do
+		local args = {3}
+		game:GetService("ReplicatedStorage"):WaitForChild("remotes"):WaitForChild("plrUpgrade"):FireServer(unpack(args))
+		task.wait(5)
 	end
 end)

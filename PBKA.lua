@@ -4,6 +4,7 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+local Humanoid = Character:WaitForChild("Humanoid")
 
 -- ตั้งค่า
 local moveSpeed = 100
@@ -29,6 +30,10 @@ toggleButton.Parent = gui
 toggleButton.MouseButton1Click:Connect(function()
 	autoMoveEnabled = not autoMoveEnabled
 	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
+
+	if autoMoveEnabled then
+		task.spawn(monitorHealth)
+	end
 end)
 
 -- โฟลเดอร์ใน GoblinArena ที่ต้องกรอง
@@ -109,21 +114,43 @@ local function getNearestUntouchedTouchPart()
 	return nearestPart
 end
 
--- Tween ไปหา
+-- Tween ไปหาเป้าหมาย โดยหยุดห่าง 2 studs
 local currentTween
 
 local function walkTo(targetCFrame)
 	if currentTween then currentTween:Cancel() end
 
-	local distance = (HumanoidRootPart.Position - targetCFrame.Position).Magnitude
+	local targetPos = targetCFrame.Position
+	local direction = (targetPos - HumanoidRootPart.Position).Unit
+	local stopDistance = 2
+	local destination = targetPos - direction * stopDistance
+
+	local distance = (HumanoidRootPart.Position - destination).Magnitude
 	local travelTime = distance / moveSpeed
 
 	local tweenInfo = TweenInfo.new(travelTime, Enum.EasingStyle.Linear)
 	local tween = TweenService:Create(HumanoidRootPart, tweenInfo, {
-		CFrame = targetCFrame * CFrame.new(0, 0, -3)
+		CFrame = CFrame.new(destination, destination + HumanoidRootPart.CFrame.LookVector)
 	})
 	currentTween = tween
 	tween:Play()
+end
+
+-- ตรวจ HP หากต่ำกว่า 20% ให้ตก void แล้วรอจน HP เต็ม
+function monitorHealth()
+	while autoMoveEnabled do
+		if Humanoid.Health / Humanoid.MaxHealth < 0.2 then
+			local currentPos = HumanoidRootPart.Position
+			local voidPos = Vector3.new(currentPos.X, currentPos.Y - 1000, currentPos.Z)
+			HumanoidRootPart.CFrame = CFrame.new(voidPos)
+			warn("Low HP! Teleporting to void...")
+
+			-- รอให้ HP รีเซ็ต
+			repeat task.wait(0.25) until Humanoid.Health >= Humanoid.MaxHealth - 1
+			warn("HP restored after void.")
+		end
+		task.wait(0.5)
+	end
 end
 
 -- ลูปหลัก

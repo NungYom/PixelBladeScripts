@@ -1,5 +1,4 @@
 local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
@@ -130,22 +129,12 @@ local function getNearestUntouchedTouchPart()
 	return nearestPart
 end
 
--- Tween ไปหา (ห่างเป้าหมาย 2 studs)
-local currentTween
-
+-- เดินไปยัง target CFrame โดยเว้นระยะ 2 studs ด้วย Humanoid:MoveTo
 local function walkTo(targetCFrame)
-	if currentTween then currentTween:Cancel() end
-
-	local offsetCFrame = targetCFrame * CFrame.new(0, 0, -2)
-	local distance = (HumanoidRootPart.Position - offsetCFrame.Position).Magnitude
-	local travelTime = distance / moveSpeed
-
-	local tweenInfo = TweenInfo.new(travelTime, Enum.EasingStyle.Linear)
-	local tween = TweenService:Create(HumanoidRootPart, tweenInfo, {
-		CFrame = offsetCFrame
-	})
-	currentTween = tween
-	tween:Play()
+	local targetPos = targetCFrame.Position
+	local direction = (HumanoidRootPart.Position - targetPos).Unit
+	local destination = targetPos + direction * 2
+	Humanoid:MoveTo(destination)
 end
 
 -- Noclip
@@ -173,67 +162,32 @@ local function setNoclip(enable)
 	end
 end
 
--- Orbit รอบ mob ด้วย TweenService เร็วและลื่นกว่า
+-- Orbit รอบ mob ด้วย Humanoid:MoveTo ให้เคลื่อนที่เร็วกว่า TweenService
 local orbiting = false
-local orbitTween
+local orbitStartTime = 0
 
 local function orbitAround(target)
-	if orbiting or not target or not target:FindFirstChild("HumanoidRootPart") then return end
-	if target.Humanoid.Health <= 0 then return end
-
-	orbiting = true
-
-	if orbitTween then
-		orbitTween:Disconnect()
-		orbitTween = nil
+	if not target or not target:FindFirstChild("HumanoidRootPart") or target.Humanoid.Health <= 0 then
+		orbiting = false
+		return
 	end
-
-	local angle = 0
-
-	orbitTween = RunService.RenderStepped:Connect(function(dt)
-		if not autoMoveEnabled
-			or not target
-			or not target:FindFirstChild("HumanoidRootPart")
-			or target.Humanoid.Health <= 0 then
-			orbiting = false
-			if orbitTween then
-				orbitTween:Disconnect()
-				orbitTween = nil
-			end
-			return
-		end
-
-		angle = angle + dt * 5 -- ความเร็วการหมุน ปรับได้
-		local offset = Vector3.new(math.cos(angle), 0, math.sin(angle)) * orbitRadius
-		local targetPos = target.HumanoidRootPart.Position + offset
-
-		if currentTween then currentTween:Cancel() end
-		local distance = (HumanoidRootPart.Position - targetPos).Magnitude
-		local travelTime = distance / moveSpeed
-
-		local tweenInfo = TweenInfo.new(travelTime, Enum.EasingStyle.Linear)
-		local tween = TweenService:Create(HumanoidRootPart, tweenInfo, {
-			CFrame = CFrame.new(targetPos.X, targetPos.Y, targetPos.Z)
-		})
-		currentTween = tween
-		tween:Play()
-	end)
+	orbiting = true
+	local t = tick()
+	local angle = ((t - orbitStartTime) * 5) % (2 * math.pi) -- ความเร็วหมุน
+	local center = target.HumanoidRootPart.Position
+	local offset = Vector3.new(math.cos(angle), 0, math.sin(angle)) * orbitRadius
+	local dest = center + offset
+	Humanoid:MoveTo(dest)
 end
 
 -- Teleport ลง void เมื่อตัวละคร hp ต่ำกว่า 20%
 local isHealing = false
 local function checkHPAndTeleportVoid()
-	if Humanoid.Health / Humanoid.MaxHealth < 0.2 then
+	if Humanoid.Health / Humanoid.MaxHealth < 0.2 and not isHealing then
 		isHealing = true
-		if currentTween then currentTween:Cancel() end
-		if orbitTween then
-			orbitTween:Disconnect()
-			orbitTween = nil
-		end
-
+		-- เทเลพอร์ตลง void
 		local currentPos = HumanoidRootPart.Position
 		local voidPos = Vector3.new(currentPos.X, currentPos.Y - 1000, currentPos.Z)
-		-- เทเลพอร์ตไป void
 		Character:SetPrimaryPartCFrame(CFrame.new(voidPos))
 		task.wait(0.5) -- รอให้เลือดฟื้น
 		isHealing = false
@@ -266,11 +220,11 @@ task.spawn(function()
 				mob = getNearestMobInRange(combatRange)
 				currentTarget = mob
 				targetStartTime = mob and os.clock() or 0
+				orbitStartTime = tick()
 			end
 
 			if mob then
 				orbitAround(mob)
-				task.wait(0.1)
 			else
 				-- หาตำแหน่ง touch part ที่ยังไม่เคยไป
 				local touchPart = getNearestUntouchedTouchPart()

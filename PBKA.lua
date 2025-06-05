@@ -1,7 +1,6 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -35,20 +34,6 @@ toggleButton.Parent = gui
 toggleButton.MouseButton1Click:Connect(function()
 	autoMoveEnabled = not autoMoveEnabled
 	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
-
-	if autoMoveEnabled then
-		startAutoPressE()
-	else
-		stopAutoPressE()
-		if circleThread then
-			circleThread:Disconnect()
-			circleThread = nil
-		end
-		if currentTween then
-			currentTween:Cancel()
-			currentTween = nil
-		end
-	end
 end)
 
 -- Filter folders
@@ -143,48 +128,19 @@ local function walkTo(targetCFrame)
 	currentTween:Play()
 end
 
-local circleThread
+-- Circle around the target at 5 studs
 local function circleAroundTarget(target)
-	circleThread = RunService.Heartbeat:Connect(function()
-		if not autoMoveEnabled or not target or not target:FindFirstChild("Humanoid") or target.Humanoid.Health <= 0 then
-			circleThread:Disconnect()
-			circleThread = nil
-			return
+	task.spawn(function()
+		while autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
+			local angle = tick() % 6.28
+			local radius = 5
+			local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
+			local goalPos = target.HumanoidRootPart.Position + offset
+			local goalCFrame = CFrame.new(goalPos, target.HumanoidRootPart.Position)
+			walkTo(goalCFrame)
+			task.wait(0.05)
 		end
-
-		local angle = tick() % 6.28
-		local radius = 20
-		local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
-		local goalPos = target.HumanoidRootPart.Position + offset
-		local goalCFrame = CFrame.new(goalPos, target.HumanoidRootPart.Position)
-		walkTo(goalCFrame)
 	end)
-end
-
--- Press E (fire server event) every 1 second while autoMoveEnabled
-local upgradeThread
-local function pressE()
-	local args = {3}
-	pcall(function()
-		ReplicatedStorage:WaitForChild("remotes"):WaitForChild("plrUpgrade"):FireServer(unpack(args))
-	end)
-end
-
-local function startAutoPressE()
-	if upgradeThread then return end
-	upgradeThread = task.spawn(function()
-		while autoMoveEnabled do
-			pressE()
-			task.wait(1)
-		end
-		upgradeThread = nil
-	end)
-end
-
-local function stopAutoPressE()
-	if upgradeThread then
-		upgradeThread = nil
-	end
 end
 
 -- Main loop

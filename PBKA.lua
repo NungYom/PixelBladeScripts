@@ -221,7 +221,7 @@ local function mainLoop()
 				end
 			end
 		end
-		task.wait(0.5)
+		task.wait(0.1)
 	end
 end
 

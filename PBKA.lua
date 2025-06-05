@@ -1,10 +1,12 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 local Humanoid = Character:WaitForChild("Humanoid")
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
 -- ตั้งค่า
 local moveSpeed = 100
@@ -13,6 +15,7 @@ local combatRange = 400
 local updateInterval = 0.75
 local autoMoveEnabled = false
 local isHealing = false
+local orbiting = false
 
 -- GUI
 local gui = Instance.new("ScreenGui", PlayerGui)
@@ -31,10 +34,6 @@ toggleButton.Parent = gui
 toggleButton.MouseButton1Click:Connect(function()
 	autoMoveEnabled = not autoMoveEnabled
 	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
-
-	if autoMoveEnabled then
-		task.spawn(monitorHealth)
-	end
 end)
 
 -- โฟลเดอร์ใน GoblinArena ที่ต้องกรอง
@@ -65,7 +64,7 @@ local excludedNames = {
 	["GoblinType2"] = true
 }
 
--- ฟังก์ชันหา mob ที่ใกล้ที่สุดภายในระยะที่กำหนด
+-- หา mob ที่ใกล้ที่สุด
 local function getNearestMobInRange(maxDistance)
 	local nearestMob = nil
 	local shortestDistance = math.huge
@@ -76,9 +75,9 @@ local function getNearestMobInRange(maxDistance)
 			and npc:FindFirstChild("Humanoid")
 			and npc:FindFirstChild("HumanoidRootPart")
 			and npc.Humanoid.Health > 0
-			and not Players:GetPlayerFromCharacter(npc)
 			and not excludedNames[npc.Name]
-			and not isInExcludedFolder(npc) then
+			and not isInExcludedFolder(npc)
+			and not Players:GetPlayerFromCharacter(npc) then
 
 			local dist = (HumanoidRootPart.Position - npc.HumanoidRootPart.Position).Magnitude
 			if dist < maxDistance and dist < shortestDistance then
@@ -94,7 +93,6 @@ end
 -- จำแคมป์ไฟที่เคยสัมผัสแล้ว
 local touchedParts = {}
 
--- หา touch part ที่ยังไม่เคยไป
 local function getNearestUntouchedTouchPart()
 	local nearestPart = nil
 	local shortestDistance = math.huge
@@ -115,46 +113,71 @@ local function getNearestUntouchedTouchPart()
 	return nearestPart
 end
 
--- Tween ไปหาเป้าหมาย โดยหยุดห่าง 2 studs
+-- Tween ไปหาเป้าหมาย (ห่าง 2 studs)
 local currentTween
 
-local function walkTo(targetCFrame)
+local function walkToOffset(targetCFrame, distance)
 	if currentTween then currentTween:Cancel() end
 
-	local targetPos = targetCFrame.Position
-	local direction = (targetPos - HumanoidRootPart.Position).Unit
-	local stopDistance = 2
-	local destination = targetPos - direction * stopDistance
-
-	local distance = (HumanoidRootPart.Position - destination).Magnitude
-	local travelTime = distance / moveSpeed
+	local dir = (targetCFrame.Position - HumanoidRootPart.Position).Unit
+	local targetPos = targetCFrame.Position - dir * distance
+	local travelTime = (HumanoidRootPart.Position - targetPos).Magnitude / moveSpeed
 
 	local tweenInfo = TweenInfo.new(travelTime, Enum.EasingStyle.Linear)
-	local tween = TweenService:Create(HumanoidRootPart, tweenInfo, {
-		CFrame = CFrame.new(destination, destination + HumanoidRootPart.CFrame.LookVector)
+	currentTween = TweenService:Create(HumanoidRootPart, tweenInfo, {
+		CFrame = CFrame.new(targetPos)
 	})
-	currentTween = tween
-	tween:Play()
+	currentTween:Play()
 end
 
--- ตรวจ HP หากต่ำกว่า 20% ให้ตก void แล้วรอจน HP เต็ม
+-- เดินวนรอบมอน
+local orbitConnection
+
+local function startOrbit(target)
+	if orbiting or not target or not target:FindFirstChild("HumanoidRootPart") then return end
+	orbiting = true
+	local radius = 2
+	local angle = 0
+
+	orbitConnection = RunService.RenderStepped:Connect(function(dt)
+		if not autoMoveEnabled or not target or not target:FindFirstChild("Humanoid") or target.Humanoid.Health <= 0 then
+			orbiting = false
+			if orbitConnection then orbitConnection:Disconnect() end
+			return
+		end
+
+		angle = angle + dt * math.pi -- ปรับความเร็วการวน
+
+		local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
+		local targetPos = target.HumanoidRootPart.Position + offset
+
+		HumanoidRootPart.CFrame = CFrame.new(targetPos, target.HumanoidRootPart.Position)
+	end)
+end
+
+-- ฟังก์ชันตรวจ HP
 function monitorHealth()
-	while autoMoveEnabled do
-		if not isHealing and (Humanoid.Health / Humanoid.MaxHealth < 0.2) then
+	while true do
+		if autoMoveEnabled and not isHealing and (Humanoid.Health / Humanoid.MaxHealth < 0.2) then
 			isHealing = true
 			local currentPos = HumanoidRootPart.Position
 			local voidPos = Vector3.new(currentPos.X, currentPos.Y - 1000, currentPos.Z)
-			Character:PivotTo(CFrame.new(voidPos)) -- << ใช้ PivotTo เพื่อให้ตก void จริง
-			warn("Low HP! Teleporting to void...")
 
-			-- รอให้ HP รีเซ็ต
-			repeat task.wait(0.25) until Humanoid.Health >= Humanoid.MaxHealth - 1
-			warn("HP restored after void.")
+			Humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+			Humanoid.PlatformStand = true
+			Character:PivotTo(CFrame.new(voidPos))
+
+			repeat task.wait(0.5) until Humanoid.Health >= Humanoid.MaxHealth - 1
+
+			Humanoid.PlatformStand = false
+			Humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
 			isHealing = false
 		end
 		task.wait(0.5)
 	end
 end
+
+task.spawn(monitorHealth)
 
 -- ลูปหลัก
 task.spawn(function()
@@ -162,12 +185,14 @@ task.spawn(function()
 		if autoMoveEnabled and not isHealing then
 			local mob = getNearestMobInRange(combatRange)
 			if mob then
-				walkTo(mob.HumanoidRootPart.CFrame)
+				walkToOffset(mob.HumanoidRootPart.CFrame, 2)
+				task.wait(0.5)
+				startOrbit(mob)
 			else
 				local touchPart = getNearestUntouchedTouchPart()
 				if touchPart then
 					touchedParts[touchPart] = true
-					walkTo(touchPart.CFrame)
+					walkToOffset(touchPart.CFrame, 0)
 					task.wait(1.5)
 				end
 			end

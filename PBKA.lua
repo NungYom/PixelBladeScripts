@@ -136,7 +136,7 @@ local orbitConnection
 local function startOrbit(target)
 	if orbiting or not target or not target:FindFirstChild("HumanoidRootPart") then return end
 	orbiting = true
-	local radius = 2
+	local radius = 4
 	local angle = 0
 
 	orbitConnection = RunService.RenderStepped:Connect(function(dt)

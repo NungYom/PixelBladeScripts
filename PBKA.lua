@@ -1,5 +1,6 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -9,6 +10,7 @@ local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
 -- Settings
 local moveSpeed = 100
+local orbitRadius = 5
 local autoMoveEnabled = false
 local touchedParts = {}
 local visitedTargets = {}
@@ -90,25 +92,37 @@ local function getAllTargetsSortedByDistance()
 	return targets
 end
 
-local function walkTo(targetCFrame)
+local function walkTo(cframe)
 	if currentTween then currentTween:Cancel() end
 
-	local distance = (HumanoidRootPart.Position - targetCFrame.Position).Magnitude
+	local distance = (HumanoidRootPart.Position - cframe.Position).Magnitude
 	local travelTime = distance / moveSpeed
 
 	local tweenInfo = TweenInfo.new(travelTime, Enum.EasingStyle.Linear)
 	currentTween = TweenService:Create(HumanoidRootPart, tweenInfo, {
-		CFrame = targetCFrame
+		CFrame = cframe
 	})
 	currentTween:Play()
 end
 
-local function followMob(target)
-	while target and target:FindFirstChild("Humanoid") and target:FindFirstChild("HumanoidRootPart") and target.Humanoid.Health > 0 and autoMoveEnabled do
-		local direction = (HumanoidRootPart.Position - target.HumanoidRootPart.Position).Unit
-		local goalPosition = target.HumanoidRootPart.Position + direction * 4
-		local goalCFrame = CFrame.new(goalPosition, target.HumanoidRootPart.Position)
-		walkTo(goalCFrame)
+local function orbitTarget(target)
+	local angle = 0
+	local orbiting = true
+
+	while orbiting and autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
+		if not target:FindFirstChild("HumanoidRootPart") then break end
+
+		-- หมุนตามวงกลม
+		local center = target.HumanoidRootPart.Position
+		angle += math.rad(30) -- ปรับความเร็วหมุน
+		if angle >= math.pi * 2 then angle = angle - math.pi * 2 end
+
+		local offsetX = math.cos(angle) * orbitRadius
+		local offsetZ = math.sin(angle) * orbitRadius
+		local orbitPosition = center + Vector3.new(offsetX, 0, offsetZ)
+		local orbitCFrame = CFrame.new(orbitPosition, center)
+
+		walkTo(orbitCFrame)
 		task.wait(0.2)
 	end
 end
@@ -121,9 +135,9 @@ local function mainLoop()
 			local selected = targets[1]
 			if selected then
 				if selected.type == "mob" then
-					if selected.object ~= lastTarget and selected.object:FindFirstChild("Humanoid") then
+					if selected.object ~= lastTarget then
 						lastTarget = selected.object
-						followMob(selected.object)
+						orbitTarget(selected.object)
 						visitedTargets[selected.object] = true
 						lastTarget = nil
 					end

@@ -14,11 +14,12 @@ local moveSpeed = 100
 local scanRadius = 1500
 local baseCombatRange = 100
 local combatRange = baseCombatRange
-local updateInterval = 0.1
+local updateInterval = 0.05
 local autoMoveEnabled = false
 local touchedParts = {}
 local lastTarget = nil
 local currentTween = nil
+local isCircling = false
 
 -- GUI
 local gui = Instance.new("ScreenGui", PlayerGui)
@@ -37,38 +38,9 @@ toggleButton.Parent = gui
 toggleButton.MouseButton1Click:Connect(function()
 	autoMoveEnabled = not autoMoveEnabled
 	toggleButton.Text = "AutoFarm: " .. (autoMoveEnabled and "ON" or "OFF")
-	if autoMoveEnabled then
-		Humanoid.WalkSpeed = moveSpeed
-	else
-		if currentTween then
-			currentTween:Cancel()
-			currentTween = nil
-		end
-		Humanoid.WalkSpeed = 16
-		lastTarget = nil
-	end
 end)
 
--- Noclip function
-local function noclip()
-	for _, part in pairs(Character:GetChildren()) do
-		if part:IsA("BasePart") then
-			part.CanCollide = false
-		end
-	end
-end
-
-RunService.Stepped:Connect(function()
-	if autoMoveEnabled then
-		noclip()
-		-- Lock camera to humanoid
-		if Camera.CameraSubject ~= Humanoid then
-			Camera.CameraSubject = Humanoid
-			Camera.CameraType = Enum.CameraType.Custom
-		end
-	end
-end)
-
+-- Filter folders
 local goblinArenaFolder = workspace:FindFirstChild("GoblinArena")
 local excludeFolders = {}
 if goblinArenaFolder then
@@ -147,36 +119,49 @@ local function getNearestUntouchedTouchPart()
 end
 
 local function walkTo(targetPosition)
-	if currentTween then
-		currentTween:Cancel()
-		currentTween = nil
-	end
+	if currentTween then currentTween:Cancel() end
 
 	local distance = (HumanoidRootPart.Position - targetPosition).Magnitude
 	local travelTime = distance / moveSpeed
-	if travelTime < 0.1 then travelTime = 0.1 end
 
 	local tweenInfo = TweenInfo.new(travelTime, Enum.EasingStyle.Linear)
 	currentTween = TweenService:Create(HumanoidRootPart, tweenInfo, {
-		CFrame = CFrame.new(targetPosition.X, HumanoidRootPart.Position.Y, targetPosition.Z)
+		CFrame = CFrame.new(targetPosition)
 	})
 	currentTween:Play()
 end
 
-local isCircling = false
+local function onTargetDied(target)
+	if target == lastTarget then
+		lastTarget = nil
+		isCircling = false
+	end
+end
 
 local function circleAroundTarget(target)
 	if isCircling then return end
 	isCircling = true
 
-	while autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
+	-- ฟังชัน HealthChanged เพื่อตรวจจับมอนตาย
+	local humanoid = target:FindFirstChild("Humanoid")
+	local healthConn
+	healthConn = humanoid.HealthChanged:Connect(function(health)
+		if health <= 0 then
+			onTargetDied(target)
+			if healthConn then healthConn:Disconnect() end
+		end
+	end)
+
+	while autoMoveEnabled and target and humanoid and humanoid.Health > 0 do
 		local touchPart = getNearestUntouchedTouchPart()
 		if touchPart then
 			touchedParts[touchPart] = true
 			walkTo(touchPart.Position)
 			task.wait(3)
 			lastTarget = nil
-			break
+			isCircling = false
+			if healthConn then healthConn:Disconnect() end
+			return
 		end
 
 		local radius = 5
@@ -187,9 +172,20 @@ local function circleAroundTarget(target)
 		task.wait(0.1)
 	end
 
+	lastTarget = nil
 	isCircling = false
+	if healthConn then healthConn:Disconnect() end
 end
 
+-- Lock camera to player
+RunService.RenderStepped:Connect(function()
+	if Camera.CameraSubject ~= Humanoid then
+		Camera.CameraSubject = Humanoid
+		Camera.CameraType = Enum.CameraType.Custom
+	end
+end)
+
+-- Main loop
 task.spawn(function()
 	while true do
 		if autoMoveEnabled then
@@ -207,7 +203,6 @@ task.spawn(function()
 					mob = getLowestHpMobInRange(combatRange)
 					if not mob then
 						combatRange += 100
-						task.wait(0.05)
 					end
 				end
 

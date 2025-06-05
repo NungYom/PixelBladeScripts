@@ -35,6 +35,23 @@ toggleButton.MouseButton1Click:Connect(function()
 	toggleButton.Text = "AutoFarm: " .. (autoMoveEnabled and "ON" or "OFF")
 end)
 
+-- Make character noclip
+local function makeCharacterNoClip(character)
+	for _, part in ipairs(character:GetDescendants()) do
+		if part:IsA("BasePart") then
+			part.CanCollide = false
+		end
+	end
+end
+
+makeCharacterNoClip(Character)
+LocalPlayer.CharacterAdded:Connect(function(newCharacter)
+	Character = newCharacter
+	Humanoid = Character:WaitForChild("Humanoid")
+	HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+	makeCharacterNoClip(Character)
+end)
+
 -- Filter folders
 local goblinArenaFolder = workspace:FindFirstChild("GoblinArena")
 local excludeFolders = {}

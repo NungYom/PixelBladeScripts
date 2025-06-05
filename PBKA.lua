@@ -139,6 +139,16 @@ end
 local function circleAroundTarget(target)
 	task.spawn(function()
 		while autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
+			-- ตรวจจับ touchPart ระหว่างวนรอบมอนสเตอร์
+			local touchPart = getNearestUntouchedTouchPart()
+			if touchPart then
+				touchedParts[touchPart] = true
+				walkTo(touchPart.CFrame)
+				task.wait(3)
+				lastTarget = nil
+				return
+			end
+
 			local angle = tick() % 6.28
 			local radius = 5
 			local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
@@ -159,7 +169,8 @@ task.spawn(function()
 			if touchPart then
 				touchedParts[touchPart] = true
 				walkTo(touchPart.CFrame)
-				task.wait(1.5)
+				task.wait(3)
+				lastTarget = nil
 			else
 				combatRange = baseCombatRange
 				local mob = nil

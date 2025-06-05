@@ -1,6 +1,5 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
-local CollectionService = game:GetService("CollectionService")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -15,6 +14,7 @@ local touchedParts = {}
 local visitedTargets = {}
 local lastTarget = nil
 local currentTween = nil
+local followConnection = nil
 
 -- GUI
 local gui = Instance.new("ScreenGui", PlayerGui)
@@ -68,54 +68,6 @@ local function isOnGround(part)
 	return ray ~= nil
 end
 
-local function isPlayerCharacter(model)
-	if not model or not model:IsA("Model") then return false end
-	if not model:FindFirstChild("HumanoidRootPart") then return false end
-
-	local player = Players:GetPlayerFromCharacter(model)
-	if player then
-		return true
-	end
-
-	for _, p in pairs(Players:GetPlayers()) do
-		if model.Name == p.Name then
-			return true
-		end
-	end
-
-	local root = model:FindFirstChild("HumanoidRootPart")
-	if root then
-		local rootParent = root.Parent
-		if rootParent and Players:GetPlayerFromCharacter(rootParent) then
-			return true
-		end
-	end
-
-	for _, child in pairs(model:GetChildren()) do
-		if child:IsA("Tool") then
-			local toolParent = child.Parent
-			if toolParent and Players:GetPlayerFromCharacter(toolParent) then
-				return true
-			end
-		end
-	end
-
-	if model:GetAttribute("IsPlayerCharacter") == true then
-		return true
-	end
-
-	local boolVal = model:FindFirstChild("IsPlayerCharacter")
-	if boolVal and boolVal:IsA("BoolValue") and boolVal.Value == true then
-		return true
-	end
-
-	if CollectionService:HasTag(model, "Player") then
-		return true
-	end
-
-	return false
-end
-
 local function getAllTargetsSortedByDistance()
 	local targets = {}
 
@@ -128,8 +80,7 @@ local function getAllTargetsSortedByDistance()
 			and not excludedNames[npc.Name]
 			and not isInExcludedFolder(npc)
 			and isOnGround(npc.HumanoidRootPart)
-			and not visitedTargets[npc]
-			and not isPlayerCharacter(npc) then
+			and not visitedTargets[npc] then
 
 			table.insert(targets, {
 				type = "mob",
@@ -173,26 +124,20 @@ local function walkTo(targetCFrame)
 	currentTween:Play()
 end
 
-local function moveToTarget(target)
-	if not target or not target:FindFirstChild("Humanoid") or target.Humanoid.Health <= 0 then return end
-
-	while target.Humanoid.Health > 0 and autoMoveEnabled do
-		local offset = (HumanoidRootPart.Position - target.HumanoidRootPart.Position).Unit * 4
-		local goalPos = target.HumanoidRootPart.Position + offset
-		local goalCFrame = CFrame.new(goalPos, target.HumanoidRootPart.Position)
-
-		walkTo(goalCFrame)
-
-		-- รอจนถึงระยะใกล้พอ หรือเป้าหมายตาย หรือปิด autoMove
-		local reached = false
-		while not reached and target.Humanoid.Health > 0 and autoMoveEnabled do
-			local distance = (HumanoidRootPart.Position - goalPos).Magnitude
-			if distance <= 5 then
-				reached = true
-			end
-			task.wait(0.3)
-		end
+local function followTargetAtDistance(npc)
+	if followConnection then
+		followConnection:Disconnect()
 	end
+
+	followConnection = game:GetService("RunService").Heartbeat:Connect(function()
+		if not npc or not npc:FindFirstChild("HumanoidRootPart") or not npc:FindFirstChild("Humanoid") then return end
+		if npc.Humanoid.Health <= 0 or not autoMoveEnabled then return end
+
+		local offset = (HumanoidRootPart.Position - npc.HumanoidRootPart.Position).Unit * 4
+		local goalPos = npc.HumanoidRootPart.Position + offset
+		local goalCFrame = CFrame.new(goalPos, npc.HumanoidRootPart.Position)
+		walkTo(goalCFrame)
+	end)
 end
 
 -- Main loop
@@ -203,13 +148,21 @@ local function mainLoop()
 			local selected = targets[1]
 			if selected then
 				if selected.type == "mob" then
-					if selected.object ~= lastTarget and selected.object:FindFirstChild("Humanoid") then
+					if selected.object ~= lastTarget then
 						lastTarget = selected.object
-						moveToTarget(selected.object)
+						followTargetAtDistance(selected.object)
+
 						repeat
 							task.wait(0.2)
 						until selected.object.Humanoid.Health <= 0 or not autoMoveEnabled
+
+						if followConnection then
+							followConnection:Disconnect()
+							followConnection = nil
+						end
+
 						visitedTargets[selected.object] = true
+						lastTarget = nil
 					end
 				elseif selected.type == "touch" then
 					lastTarget = selected.object

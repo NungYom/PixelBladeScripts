@@ -37,6 +37,24 @@ toggleButton.MouseButton1Click:Connect(function()
 	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
 end)
 
+-- HP Button
+local hpButton = Instance.new("TextButton")
+hpButton.Size = UDim2.new(0, 200, 0, 50)
+hpButton.Position = UDim2.new(0, 20, 0, 80)
+hpButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+hpButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+hpButton.Font = Enum.Font.GothamBold
+hpButton.TextSize = 20
+hpButton.Text = "Check %HP"
+hpButton.Parent = gui
+
+hpButton.MouseButton1Click:Connect(function()
+	local hp = Humanoid.Health
+	local maxHp = Humanoid.MaxHealth
+	local percent = math.floor((hp / maxHp) * 100)
+	game.ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(tostring(percent).."% HP", "All")
+end)
+
 -- Filter folders
 local goblinArenaFolder = workspace:FindFirstChild("GoblinArena")
 local excludeFolders = {}

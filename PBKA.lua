@@ -33,24 +33,36 @@ toggleButton.TextSize = 20
 toggleButton.Text = "AutoMove: OFF"
 toggleButton.Parent = gui
 
--- ฟังก์ชันเปิด/ปิด noclip
-local noclipEnabled = false
-local function setNoclip(enabled)
-	noclipEnabled = enabled
-end
+-- noclip setup
+local noclipConnection
 
-local function noclipLoop()
-	RunService.Stepped:Connect(function()
-		if noclipEnabled and Character then
+local function setNoclip(enabled)
+	if enabled then
+		if noclipConnection then return end -- ถ้ามีแล้วไม่ต้องทำซ้ำ
+		noclipConnection = RunService.Stepped:Connect(function()
+			if Character and Character.Parent then
+				for _, part in pairs(Character:GetChildren()) do
+					if part:IsA("BasePart") and part.CanCollide == true then
+						part.CanCollide = false
+					end
+				end
+			end
+		end)
+	else
+		if noclipConnection then
+			noclipConnection:Disconnect()
+			noclipConnection = nil
+		end
+		-- เปิดการชนให้ปกติเมื่อปิด noclip
+		if Character and Character.Parent then
 			for _, part in pairs(Character:GetChildren()) do
-				if part:IsA("BasePart") and part.CanCollide == true then
-					part.CanCollide = false
+				if part:IsA("BasePart") then
+					part.CanCollide = true
 				end
 			end
 		end
-	end)
+	end
 end
-noclipLoop()
 
 toggleButton.MouseButton1Click:Connect(function()
 	autoMoveEnabled = not autoMoveEnabled
@@ -99,7 +111,7 @@ local function getNearestMobInRange(maxDistance)
 			and not excludedNames[npc.Name]
 			and not isInExcludedFolder(npc) then
 
-			-- ไม่ใช่ผู้เล่นอื่น (ตรวจสอบแบบง่ายๆ ถ้ามี leaderstats หรือชื่อผู้เล่น)
+			-- ไม่ใช่ผู้เล่นอื่น
 			local isPlayerModel = Players:GetPlayerFromCharacter(npc) ~= nil
 			if not isPlayerModel then
 				local dist = (HumanoidRootPart.Position - npc.HumanoidRootPart.Position).Magnitude
@@ -216,55 +228,25 @@ task.spawn(function()
 			local mob = nil
 
 			if currentTarget and currentTarget:FindFirstChild("Humanoid") and currentTarget.Humanoid.Health > 0 then
-				-- ถ้าเป้าหมายเดิมยังมีชีวิต และไม่เกินเวลาที่กำหนด ให้ตามเป้าหมายเดิม
-				if tick() - targetStartTime <= targetTimeout then
+				-- ถ้าเป้าหมายเดิมยังมีชีวิตอยู่และไม่ timeout
+				if os.clock() - targetStartTime < targetTimeout then
 					mob = currentTarget
 				else
-					-- หา mob ใหม่ เพราะเวลาตามเกิน 3 วิแล้ว
-					mob = getNearestMobInRange(combatRange)
-					if mob ~= currentTarget then
-						currentTarget = mob
-						targetStartTime = tick()
-					end
-				end
-			else
-				-- หา mob ใหม่
-				mob = getNearestMobInRange(combatRange)
-				if mob ~= currentTarget then
-					currentTarget = mob
-					targetStartTime = tick()
+					currentTarget = nil
 				end
 			end
 
-			if mob then
-				walkTo(mob.HumanoidRootPart.CFrame)
-				repeat
-					task.wait(0.05)
-					-- ถ้ามอนตายหรือ autoMove ปิด หรือ กำลังฟื้น ให้หยุด
-					if not mob or not mob.Parent or not mob:FindFirstChild("Humanoid") or mob.Humanoid.Health <= 0 or not autoMoveEnabled or isHealing then
-						break
-					end
-					-- ถ้าเวลาตามเป้าหมายเกิน timeout ให้ break เพื่อเปลี่ยนเป้าหมายในลูปข้างบน
-					if tick() - targetStartTime > targetTimeout then
-						break
-					end
-				until false
+			if not mob then
+				mob = getNearestMobInRange(combatRange)
+				currentTarget = mob
+				targetStartTime = mob and os.clock() or 0
+			end
 
-				if mob and mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 and not isHealing then
-					orbitAround(mob)
-					-- รอจน mob ตายหรือหยุด auto move หรือเริ่ม healing
-					repeat
-						task.wait(0.1)
-						if not mob or not mob.Parent or not mob:FindFirstChild("Humanoid") or mob.Humanoid.Health <= 0 or not autoMoveEnabled or isHealing then
-							break
-						end
-					until false
-					-- หยุดวงโคจร
-					if orbitConnection then orbitConnection:Disconnect() end
-					orbiting = false
-				end
+			if mob then
+				orbitAround(mob)
+				task.wait(0.1)
 			else
-				currentTarget = nil
+				-- หาตำแหน่ง touch part ที่ยังไม่เคยไป
 				local touchPart = getNearestUntouchedTouchPart()
 				if touchPart then
 					touchedParts[touchPart] = true

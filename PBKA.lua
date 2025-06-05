@@ -17,6 +17,7 @@ local orbiting = false
 local orbitRadius = 4
 local orbitConnection
 local isHealing = false -- สถานะฟื้นฟูเลือด
+local targetTimeout = 3 -- วินาทีที่ให้ตามเป้าหมายเดิมก่อนเปลี่ยน
 
 -- GUI
 local gui = Instance.new("ScreenGui", PlayerGui)
@@ -188,26 +189,62 @@ end)
 
 -- ลูปหลักควบคุมการเดินหา mob และ touch parts
 task.spawn(function()
+	local currentTarget = nil
+	local targetStartTime = 0
 	while true do
 		if autoMoveEnabled and not isHealing then
-			local mob = getNearestMobInRange(combatRange)
+			local mob = nil
+
+			if currentTarget and currentTarget:FindFirstChild("Humanoid") and currentTarget.Humanoid.Health > 0 then
+				-- ถ้าเป้าหมายเดิมยังมีชีวิต และไม่เกินเวลาที่กำหนด ให้ตามเป้าหมายเดิม
+				if tick() - targetStartTime <= targetTimeout then
+					mob = currentTarget
+				else
+					-- หา mob ใหม่ เพราะเวลาตามเกิน 3 วิแล้ว
+					mob = getNearestMobInRange(combatRange)
+					if mob ~= currentTarget then
+						currentTarget = mob
+						targetStartTime = tick()
+					end
+				end
+			else
+				-- หา mob ใหม่
+				mob = getNearestMobInRange(combatRange)
+				if mob ~= currentTarget then
+					currentTarget = mob
+					targetStartTime = tick()
+				end
+			end
+
 			if mob then
 				walkTo(mob.HumanoidRootPart.CFrame)
 				repeat
 					task.wait(0.05)
-				until not mob or not mob:FindFirstChild("Humanoid") or mob.Humanoid.Health <= 0 or not autoMoveEnabled or isHealing
+					-- ถ้ามอนตายหรือ autoMove ปิด หรือ กำลังฟื้น ให้หยุด
+					if not mob or not mob.Parent or not mob:FindFirstChild("Humanoid") or mob.Humanoid.Health <= 0 or not autoMoveEnabled or isHealing then
+						break
+					end
+					-- ถ้าเวลาตามเป้าหมายเกิน timeout ให้ break เพื่อเปลี่ยนเป้าหมายในลูปข้างบน
+					if tick() - targetStartTime > targetTimeout then
+						break
+					end
+				until false
 
 				if mob and mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 and not isHealing then
 					orbitAround(mob)
 					-- รอจน mob ตายหรือหยุด auto move หรือเริ่ม healing
 					repeat
 						task.wait(0.1)
-					until not mob or not mob:FindFirstChild("Humanoid") or mob.Humanoid.Health <= 0 or not autoMoveEnabled or isHealing
+						if not mob or not mob.Parent or not mob:FindFirstChild("Humanoid") or mob.Humanoid.Health <= 0 or not autoMoveEnabled or isHealing then
+							break
+						end
+					until false
 					-- หยุดวงโคจร
 					if orbitConnection then orbitConnection:Disconnect() end
 					orbiting = false
 				end
 			else
+				currentTarget = nil
 				local touchPart = getNearestUntouchedTouchPart()
 				if touchPart then
 					touchedParts[touchPart] = true

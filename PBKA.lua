@@ -128,16 +128,12 @@ local function walkTo(targetCFrame)
 	currentTween:Play()
 end
 
--- Move around target in a smooth circle
-local function circleAroundTarget(target)
+-- Float above the target's head
+local function floatAboveTarget(target)
 	task.spawn(function()
-		local angle = 0
-		local radius = 4
 		while autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
-			angle += math.rad(3)
-			local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
-			local goalPos = target.HumanoidRootPart.Position + offset
-			local goalCFrame = CFrame.new(goalPos, target.HumanoidRootPart.Position)
+			local goalPos = target.HumanoidRootPart.Position + Vector3.new(0, 20, 0)
+			local goalCFrame = CFrame.new(goalPos)
 			walkTo(goalCFrame)
 			task.wait(0.05)
 		end
@@ -152,9 +148,7 @@ task.spawn(function()
 			if mob then
 				if mob ~= lastTarget then
 					lastTarget = mob
-					local offsetCFrame = mob.HumanoidRootPart.CFrame * CFrame.new(0, 0, -4)
-					walkTo(offsetCFrame)
-					circleAroundTarget(mob)
+					floatAboveTarget(mob)
 				end
 			else
 				local touchPart = getNearestUntouchedTouchPart()

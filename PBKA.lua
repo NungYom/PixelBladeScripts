@@ -1,6 +1,5 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
-local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -10,9 +9,9 @@ local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
 -- Settings
 local moveSpeed = 100
-local updateInterval = 0.05
 local autoMoveEnabled = false
 local touchedParts = {}
+local visitedTargets = {}
 local lastTarget = nil
 local currentTween = nil
 
@@ -82,7 +81,8 @@ local function getAllTargetsSortedBySpawn()
 			and npc.Humanoid.Health > 0
 			and not excludedNames[npc.Name]
 			and not isInExcludedFolder(npc)
-			and isOnGround(npc.HumanoidRootPart) then
+			and isOnGround(npc.HumanoidRootPart)
+			and not visitedTargets[npc] then
 
 			table.insert(targets, {
 				type = "mob",
@@ -95,7 +95,8 @@ local function getAllTargetsSortedBySpawn()
 	for _, part in pairs(workspace:GetDescendants()) do
 		if part:IsA("BasePart")
 			and part.Name:lower() == "touch"
-			and not touchedParts[part] then
+			and not touchedParts[part]
+			and not visitedTargets[part] then
 
 			table.insert(targets, {
 				type = "touch",
@@ -137,23 +138,29 @@ local function moveToTarget(target)
 	end)
 end
 
--- Main loop
-RunService.Heartbeat:Connect(function()
-	if autoMoveEnabled then
-		local targets = getAllTargetsSortedBySpawn()
-		local selected = targets[1]
-		if selected then
-			if selected.type == "mob" then
-				if selected.object ~= lastTarget then
-					lastTarget = selected.object
-					moveToTarget(selected.object)
+-- Main loop with reduced frequency
+local function mainLoop()
+	while true do
+		if autoMoveEnabled then
+			local targets = getAllTargetsSortedBySpawn()
+			local selected = targets[1]
+			if selected then
+				visitedTargets[selected.object] = true
+				if selected.type == "mob" then
+					if selected.object ~= lastTarget then
+						lastTarget = selected.object
+						moveToTarget(selected.object)
+					end
+				elseif selected.type == "touch" then
+					touchedParts[selected.object] = true
+					walkTo(selected.object.CFrame)
+					task.wait(3)
+					lastTarget = nil
 				end
-			elseif selected.type == "touch" then
-				touchedParts[selected.object] = true
-				walkTo(selected.object.CFrame)
-				task.wait(3)
-				lastTarget = nil
 			end
 		end
+		task.wait(0.5)
 	end
-end)
+end
+
+task.spawn(mainLoop)

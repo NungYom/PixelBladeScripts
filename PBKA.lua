@@ -138,16 +138,21 @@ local function mainLoop()
 			local targets = getAllTargetsSortedByDistance()
 			local selected = targets[1]
 			if selected then
-				visitedTargets[selected.object] = true
 				if selected.type == "mob" then
-					if selected.object ~= lastTarget then
+					if selected.object ~= lastTarget and selected.object:FindFirstChild("Humanoid") then
 						lastTarget = selected.object
 						moveToTarget(selected.object)
+						repeat
+							task.wait(0.2)
+						until selected.object.Humanoid.Health <= 0 or not autoMoveEnabled
+						visitedTargets[selected.object] = true
 					end
 				elseif selected.type == "touch" then
-					touchedParts[selected.object] = true
+					lastTarget = selected.object
 					walkTo(selected.object.CFrame)
 					task.wait(3)
+					touchedParts[selected.object] = true
+					visitedTargets[selected.object] = true
 					lastTarget = nil
 				end
 			end

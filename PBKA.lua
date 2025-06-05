@@ -70,6 +70,7 @@ local function getNearestMobInRange(maxDistance)
 			and npc:FindFirstChild("Humanoid")
 			and npc:FindFirstChild("HumanoidRootPart")
 			and npc.Humanoid.Health > 0
+			and not Players:GetPlayerFromCharacter(npc)
 			and not excludedNames[npc.Name]
 			and not isInExcludedFolder(npc) then
 

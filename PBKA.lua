@@ -10,15 +10,15 @@ local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
 -- Settings
 local moveSpeed = 100
-local updateInterval = 0.05
 local autoMoveEnabled = false
 local touchedParts = {}
 local lastTarget = nil
 local currentTween = nil
 
 -- GUI
-local gui = Instance.new("ScreenGui", PlayerGui)
+local gui = Instance.new("ScreenGui")
 gui.Name = "AutoMoveGUI"
+gui.Parent = PlayerGui
 
 local toggleButton = Instance.new("TextButton")
 toggleButton.Size = UDim2.new(0, 200, 0, 50)
@@ -35,7 +35,7 @@ toggleButton.MouseButton1Click:Connect(function()
 	toggleButton.Text = "AutoFarm: " .. (autoMoveEnabled and "ON" or "OFF")
 end)
 
--- Filter folders
+-- Filter folders (excluded folders)
 local goblinArenaFolder = workspace:FindFirstChild("GoblinArena")
 local excludeFolders = {}
 if goblinArenaFolder then
@@ -68,146 +68,83 @@ local function isOnGround(part)
 	return ray ~= nil
 end
 
-local function hasDescendantAI(npc)
-	for _, descendant in ipairs(npc:GetDescendants()) do
-		if descendant:IsA("Script") or descendant:IsA("ModuleScript") then
-			return true
-		end
-	end
-	return false
-end
-
-local function hasActiveAnimations(humanoid)
-	local animator = humanoid:FindFirstChildOfClass("Animator")
-	if animator then
-		for _, animTrack in ipairs(animator:GetPlayingAnimationTracks()) do
-			if animTrack.IsPlaying then
+-- ตรวจสอบว่ามี Behavior/AI จริงๆไหม (แยก mob ที่ยืนเฉยๆ)
+local function hasActiveBehavior(npc)
+	-- วิธีเช็คที่ค่อนข้างทั่วๆไป เช่น มี Script ที่เปิดใช้งาน, มี AI Module, หรือมี HumanoidRootPart เคลื่อนไหวอยู่บ้าง
+	-- เนื่องจากไม่มีข้อมูลชัดเจนของ Behavior ในเกมนี้ ผมจะเช็คอย่างคร่าวๆโดยดูว่า npc มี Script ที่ Enabled อยู่ในตัวหรือไม่
+	for _, child in ipairs(npc:GetChildren()) do
+		if child:IsA("Script") or child:IsA("LocalScript") or child:IsA("ModuleScript") then
+			if child.Enabled then
 				return true
 			end
 		end
 	end
-	return false
-end
-
-local function hasBodyMovers(npc)
-	for _, descendant in ipairs(npc:GetDescendants()) do
-		if descendant:IsA("BodyPosition")
-			or descendant:IsA("BodyVelocity")
-			or descendant:IsA("BodyGyro")
-			or descendant:IsA("BodyAngularVelocity")
-			or descendant:IsA("BodyForce")
-			or descendant:IsA("BodyThrust") then
-			return true
-		end
+	-- หรือถ้า npc เดิน/เคลื่อนไหวบ้าง (ตรวจสอบ velocity HumanoidRootPart)
+	local vel = npc:FindFirstChild("HumanoidRootPart") and npc.HumanoidRootPart.Velocity.Magnitude or 0
+	if vel > 0.1 then
+		return true
 	end
+
 	return false
 end
 
-local function isRealMob(npc)
-	local hrp = npc:FindFirstChild("HumanoidRootPart")
+-- ตรวจสอบว่าตัวละครตีได้จริงไหม (มี Humanoid, HP > 0, ไม่ใช่ excludedNames, อยู่บนพื้น)
+local function isValidTarget(npc)
+	if not npc or not npc:IsA("Model") then return false end
 	local humanoid = npc:FindFirstChild("Humanoid")
-	if not hrp or not humanoid then return false end
-	
+	local hrp = npc:FindFirstChild("HumanoidRootPart")
+	if not humanoid or not hrp then return false end
 	if humanoid.Health <= 0 then return false end
-	
-	if isInExcludedFolder(npc) then return false end
 	if excludedNames[npc.Name] then return false end
+	if isInExcludedFolder(npc) then return false end
 	if not isOnGround(hrp) then return false end
-	
-	-- ต้องมี AI Script ในลูกหลาน หรือ
-	-- มี Animator พร้อมเล่นแอนิเมชัน หรือ
-	-- มี BodyMover ควบคุมการเคลื่อนที่ หรือ
-	-- เดินได้ (WalkSpeed > 0) หรือ
-	-- ขยับอยู่ (Velocity > 0.1)
-	
-	if hasDescendantAI(npc) then
-		return true
-	end
-	
-	if hasActiveAnimations(humanoid) then
-		return true
-	end
-	
-	if hasBodyMovers(npc) then
-		return true
-	end
-	
-	if humanoid.WalkSpeed > 0 then
-		return true
-	end
-	
-	if hrp.Velocity.Magnitude > 0.1 then
-		return true
-	end
-	
-	-- ถ้าไม่มีอะไรเลย ถือว่าไม่ใช่มอนที่พร้อมตี
-	return false
+	if not hasActiveBehavior(npc) then return false end
+	return true
 end
 
-local function getAllNearbyTargets()
-	local realMobs = {}
-	local fakeMobs = {}
-	local touches = {}
+local function getAllTargets()
+	local worldSpawn = workspace:FindFirstChild("SpawnLocation") or Instance.new("Part")
+	worldSpawn.Position = Vector3.new(0,0,0)
 
-	local worldSpawn = workspace:FindFirstChild("SpawnLocation")
-	if not worldSpawn then
-		worldSpawn = Instance.new("Part")
-		worldSpawn.Position = Vector3.new(0, 0, 0)
-	end
-	local spawnPos = worldSpawn.Position
+	local targetsWithBehaviorFar = {}
+	local targetsWithBehaviorNear = {}
+	local touchTargets = {}
 
 	for _, npc in pairs(workspace:GetDescendants()) do
-		if npc:IsA("Model")
-			and npc ~= Character
-			and npc:FindFirstChild("Humanoid")
-			and npc:FindFirstChild("HumanoidRootPart")
-			and npc.Humanoid.Health > 0 then
-
-			local dist = (spawnPos - npc.HumanoidRootPart.Position).Magnitude
-			if true then -- ลบระยะขอบเขตออกทั้งหมด
-				if isRealMob(npc) then
-					table.insert(realMobs, {type = "realmob", object = npc, distance = dist})
-				else
-					table.insert(fakeMobs, {type = "fakemob", object = npc, distance = dist})
+		if npc:IsA("Model") and npc ~= Character then
+			if isValidTarget(npc) then
+				-- แยกใกล้ไกลจาก world spawn ตาม velocity (หรือจะใช้ตำแหน่งอย่างเดียวก็ได้)
+				-- ผมจะใช้ระยะจาก spawn เป็นหลัก แต่ต้องแยกให้ตามโจทย์
+				-- หาก velocity สูงกว่า 0.1 คือ active behavior => far group
+				local hrp = npc.HumanoidRootPart
+				local dist = (worldSpawn.Position - hrp.Position).Magnitude
+				if hasActiveBehavior(npc) then
+					-- ถ้าอยู่ไกล spawn กว่าค่าเฉลี่ย + 50 studs ถือว่า far group
+					-- แทนการหาค่าเฉลี่ย จะใช้ค่าเกณฑ์ 150 studs (ปรับได้)
+					if dist > 150 then
+						table.insert(targetsWithBehaviorFar, {npc = npc, dist = dist})
+					else
+						table.insert(targetsWithBehaviorNear, {npc = npc, dist = dist})
+					end
 				end
 			end
 		end
 	end
 
+	-- เก็บ touch ส่วนที่ยังไม่โดน
 	for _, part in pairs(workspace:GetDescendants()) do
-		if part:IsA("BasePart")
-			and part.Name:lower() == "touch"
-			and not touchedParts[part] then
-
-			local dist = (spawnPos - part.Position).Magnitude
-			if true then -- ลบระยะขอบเขตออกทั้งหมด
-				table.insert(touches, {type = "touch", object = part, distance = dist})
-			end
+		if part:IsA("BasePart") and part.Name:lower() == "touch" and not touchedParts[part] then
+			local dist = (worldSpawn.Position - part.Position).Magnitude
+			table.insert(touchTargets, {part = part, dist = dist})
 		end
 	end
 
-	-- 1. มอนที่มี behavior (realMobs) เรียงจากไกล → ใกล้
-	table.sort(realMobs, function(a, b)
-		return a.distance > b.distance -- มากไปน้อย
-	end)
+	-- จัดเรียงแต่ละกลุ่มตามระยะจาก spawn
+	table.sort(targetsWithBehaviorFar, function(a,b) return a.dist > b.dist end) -- far: มากไปน้อย (ไกลไปใกล้)
+	table.sort(targetsWithBehaviorNear, function(a,b) return a.dist < b.dist end) -- near: น้อยไปมาก (ใกล้ไปไกล)
+	table.sort(touchTargets, function(a,b) return a.dist < b.dist end) -- touch: ใกล้ไปไกล
 
-	-- 2. มอนที่ไม่มี behavior (fakeMobs) เรียงจากใกล้ → ไกล
-	table.sort(fakeMobs, function(a, b)
-		return a.distance < b.distance -- น้อยไปมาก
-	end)
-
-	-- 3. touch เรียงจากใกล้ → ไกล
-	table.sort(touches, function(a, b)
-		return a.distance < b.distance
-	end)
-
-	-- รวมลิสต์ตามลำดับที่ต้องการ
-	local combined = {}
-	for _, v in ipairs(realMobs) do table.insert(combined, v) end
-	for _, v in ipairs(fakeMobs) do table.insert(combined, v) end
-	for _, v in ipairs(touches) do table.insert(combined, v) end
-
-	return combined
+	return targetsWithBehaviorFar, targetsWithBehaviorNear, touchTargets
 end
 
 local function walkTo(targetCFrame)
@@ -223,35 +160,55 @@ local function walkTo(targetCFrame)
 	currentTween:Play()
 end
 
-local function moveToTarget(target)
+-- Move near target at 4 studs
+local function moveToTarget(targetModel)
 	task.spawn(function()
-		while autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
-			local offset = (HumanoidRootPart.Position - target.HumanoidRootPart.Position).Unit * 4
-			local goalPos = target.HumanoidRootPart.Position + offset
-			local goalCFrame = CFrame.new(goalPos)
+		while autoMoveEnabled and targetModel and targetModel:FindFirstChild("Humanoid") and targetModel.Humanoid.Health > 0 do
+			local hrp = targetModel:FindFirstChild("HumanoidRootPart")
+			if not hrp then break end
+			local direction = (HumanoidRootPart.Position - hrp.Position)
+			if direction.Magnitude < 4 then break end
+			local offset = direction.Unit * 4
+			local goalPos = hrp.Position + offset
+			local goalCFrame = CFrame.new(goalPos, hrp.Position)
 			walkTo(goalCFrame)
-			task.wait(updateInterval)
+			task.wait(0.05)
 		end
 	end)
 end
 
-RunService.Heartbeat:Connect(function()
-	if not autoMoveEnabled then return end
+-- Main loop
+task.spawn(function()
+	while true do
+		if autoMoveEnabled then
+			local far, near, touchs = getAllTargets()
+			local target = nil
 
-	local targets = getAllNearbyTargets()
-	local targetData = targets[1]
+			-- เลือกเป้าหมายตามลำดับ priority
+			if #far > 0 then
+				target = far[1].npc
+			elseif #near > 0 then
+				target = near[1].npc
+			elseif #touchs > 0 then
+				target = touchs[1].part
+			end
 
-	if targetData and targetData.object then
-		local target = targetData.object
-		if lastTarget ~= target then
-			lastTarget = target
-			moveToTarget(target)
+			if target then
+				if typeof(target) == "Instance" and target:IsA("BasePart") then
+					-- เป็น touch
+					touchedParts[target] = true
+					walkTo(target.CFrame)
+					task.wait(3)
+					lastTarget = nil
+				elseif target:IsA("Model") then
+					-- เป็น mob
+					if target ~= lastTarget then
+						lastTarget = target
+						moveToTarget(target)
+					end
+				end
+			end
 		end
-	else
-		if currentTween then
-			currentTween:Cancel()
-			currentTween = nil
-		end
-		lastTarget = nil
+		task.wait(0.05)
 	end
 end)

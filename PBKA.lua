@@ -142,21 +142,21 @@ local function circleAroundTarget(target)
 		end
 	end)
 end
--- ปิดเอฟเฟกต์ทุกอย่างเพื่อเพิ่มประสิทธิภาพสูงสุด
+-- ปิดเอฟเฟกต์เพื่อเพิ่มเฟรมเรต โดยไม่ยุ่งกับ Texture/Decal ของเกม
 task.spawn(function()
 	while true do
 		for _, obj in pairs(workspace:GetDescendants()) do
-			if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") or obj:IsA("Smoke") then
+			if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") then
 				obj.Enabled = false
 			elseif obj:IsA("Light") then
 				obj.Enabled = false
-			elseif obj:IsA("Decal") or obj:IsA("Texture") then
-				obj.Transparency = 1
 			end
 		end
-		-- ปิด Shadows และ Effects ที่ฝั่ง LocalPlayer
-		settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
-		UserSettings():GetService("UserGameSettings").SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1
+		-- ลดคุณภาพกราฟิกจากฝั่งผู้เล่นโดยไม่ทำลายองค์ประกอบของเกม
+		pcall(function()
+			settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+			UserSettings():GetService("UserGameSettings").SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1
+		end)
 		task.wait(2)
 	end
 end)

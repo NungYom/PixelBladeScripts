@@ -11,7 +11,7 @@ local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 -- Settings
 local moveSpeed = 100
 local scanRadius = 1500
-local baseCombatRange = 300
+local baseCombatRange = 100
 local combatRange = baseCombatRange
 local updateInterval = 0.05
 local autoMoveEnabled = false

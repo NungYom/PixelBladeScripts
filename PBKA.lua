@@ -8,8 +8,8 @@ local Humanoid = Character:WaitForChild("Humanoid")
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
 -- Settings
-local moveSpeed = 100
-local autoMoveEnabled = false
+local moveSpeed = 80
+local autoMoveEnabled = false -- เพิ่มการกรอง ไม่เอาผู้เล่นอื่น 
 local touchedParts = {}
 local visitedTargets = {}
 local lastTarget = nil
@@ -79,7 +79,8 @@ local function getAllTargetsSortedByDistance()
 			and not excludedNames[npc.Name]
 			and not isInExcludedFolder(npc)
 			and isOnGround(npc.HumanoidRootPart)
-			and not visitedTargets[npc] then
+			and not visitedTargets[npc]
+			and not Players:GetPlayerFromCharacter(npc) then -- กรองผู้เล่นออก
 
 			table.insert(targets, {
 				type = "mob",

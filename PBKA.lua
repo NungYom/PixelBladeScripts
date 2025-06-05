@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -17,6 +18,7 @@ local updateInterval = 0.05
 local autoMoveEnabled = false
 local touchedParts = {}
 local lastTarget = nil
+local currentTween = nil
 
 -- GUI
 local gui = Instance.new("ScreenGui", PlayerGui)
@@ -115,31 +117,23 @@ local function getNearestUntouchedTouchPart()
 	return nearestPart
 end
 
--- New walkTo using SetPrimaryPartCFrame
 local function walkTo(targetCFrame)
-	if Character.PrimaryPart == nil then
-		Character.PrimaryPart = HumanoidRootPart
-	end
+	if currentTween then currentTween:Cancel() end
 
-	local distance = (Character.PrimaryPart.Position - targetCFrame.Position).Magnitude
+	local distance = (HumanoidRootPart.Position - targetCFrame.Position).Magnitude
 	local travelTime = distance / moveSpeed
-	local startTime = tick()
 
-	task.spawn(function()
-		while tick() - startTime < travelTime do
-			local alpha = (tick() - startTime) / travelTime
-			Character:SetPrimaryPartCFrame(Character.PrimaryPart.CFrame:Lerp(targetCFrame, alpha))
-			RunService.Heartbeat:Wait()
-		end
-		Character:SetPrimaryPartCFrame(targetCFrame)
-	end)
+	local tweenInfo = TweenInfo.new(travelTime, Enum.EasingStyle.Linear)
+	currentTween = TweenService:Create(HumanoidRootPart, tweenInfo, {
+		CFrame = targetCFrame
+	})
+	currentTween:Play()
 end
 
 -- Circle around the target at 5 studs
 local function circleAroundTarget(target)
 	task.spawn(function()
 		while autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
-			-- ตรวจจับ touchPart ระหว่างวนรอบมอนสเตอร์
 			local touchPart = getNearestUntouchedTouchPart()
 			if touchPart then
 				touchedParts[touchPart] = true
@@ -160,11 +154,18 @@ local function circleAroundTarget(target)
 	end)
 end
 
+-- Lock camera to player
+RunService.RenderStepped:Connect(function()
+	if Camera.CameraSubject ~= Humanoid then
+		Camera.CameraSubject = Humanoid
+		Camera.CameraType = Enum.CameraType.Custom
+	end
+end)
+
 -- Main loop
 task.spawn(function()
 	while true do
 		if autoMoveEnabled then
-			-- Always check for touch part first
 			local touchPart = getNearestUntouchedTouchPart()
 			if touchPart then
 				touchedParts[touchPart] = true
@@ -175,7 +176,6 @@ task.spawn(function()
 				combatRange = baseCombatRange
 				local mob = nil
 
-				-- Try expanding range step-by-step
 				while not mob and combatRange <= scanRadius do
 					mob = getLowestHpMobInRange(combatRange)
 					if not mob then

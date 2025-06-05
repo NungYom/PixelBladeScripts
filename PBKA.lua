@@ -1,13 +1,15 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local Humanoid = Character:WaitForChild("Humanoid")
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+
+-- รอให้ GUI โหลดเต็มที่ก่อนสร้าง UI
+RunService.RenderStepped:Wait()
 
 -- Settings
 local moveSpeed = 100
@@ -18,12 +20,11 @@ local autoMoveEnabled = false
 local touchedParts = {}
 local lastTarget = nil
 
--- RemoteEvent สมมติ ชื่อ UseSkill (กดปุ่ม E)
-local useSkillRemote = ReplicatedStorage:WaitForChild("remotes"):WaitForChild("UseSkill")
-
 -- GUI
-local gui = Instance.new("ScreenGui", PlayerGui)
+local gui = Instance.new("ScreenGui")
 gui.Name = "AutoMoveGUI"
+gui.ResetOnSpawn = false
+gui.Parent = PlayerGui
 
 local toggleButton = Instance.new("TextButton")
 toggleButton.Size = UDim2.new(0, 200, 0, 50)
@@ -35,57 +36,9 @@ toggleButton.TextSize = 20
 toggleButton.Text = "AutoMove: OFF"
 toggleButton.Parent = gui
 
-local autoMoveTask = nil
-local skillTask = nil
-
 toggleButton.MouseButton1Click:Connect(function()
 	autoMoveEnabled = not autoMoveEnabled
 	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
-
-	if autoMoveEnabled then
-		-- เริ่มฟังก์ชัน auto move
-		autoMoveTask = task.spawn(function()
-			while autoMoveEnabled do
-				local mob = getNearestMobInRange(combatRange)
-				if mob then
-					if mob ~= lastTarget then
-						lastTarget = mob
-						circleAroundTarget(mob)
-					end
-				else
-					local touchPart = getNearestUntouchedTouchPart()
-					if touchPart then
-						touchedParts[touchPart] = true
-						walkTo(touchPart.CFrame)
-						task.wait(1.5)
-					end
-				end
-				task.wait(updateInterval)
-			end
-		end)
-
-		-- เริ่มกดปุ่ม E อัตโนมัติ ทุก 1 วินาที
-		skillTask = task.spawn(function()
-			while autoMoveEnabled do
-				pcall(function()
-					useSkillRemote:FireServer()
-				end)
-				task.wait(1)
-			end
-		end)
-
-	else
-		-- หยุดทั้งสองงาน
-		if autoMoveTask then
-			autoMoveTask:Cancel()
-			autoMoveTask = nil
-		end
-		if skillTask then
-			skillTask:Cancel()
-			skillTask = nil
-		end
-		lastTarget = nil
-	end
 end)
 
 -- Filter folders
@@ -194,3 +147,35 @@ local function circleAroundTarget(target)
 		end
 	end)
 end
+
+-- Main loop
+task.spawn(function()
+	while true do
+		if autoMoveEnabled then
+			local mob = getNearestMobInRange(combatRange)
+			if mob then
+				if mob ~= lastTarget then
+					lastTarget = mob
+					circleAroundTarget(mob)
+				end
+			else
+				local touchPart = getNearestUntouchedTouchPart()
+				if touchPart then
+					touchedParts[touchPart] = true
+					walkTo(touchPart.CFrame)
+					task.wait(1.5)
+				end
+			end
+		end
+		task.wait(updateInterval)
+	end
+end)
+
+-- Fire plrUpgrade every 5 seconds
+task.spawn(function()
+	while true do
+		local args = {3}
+		game:GetService("ReplicatedStorage"):WaitForChild("remotes"):WaitForChild("plrUpgrade"):FireServer(unpack(args))
+		task.wait(5)
+	end
+end)

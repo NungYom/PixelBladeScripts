@@ -1,4 +1,5 @@
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
 
@@ -17,7 +18,7 @@ local updateInterval = 0.1
 local autoMoveEnabled = false
 local touchedParts = {}
 local lastTarget = nil
-local moving = false
+local currentTween = nil
 
 -- GUI
 local gui = Instance.new("ScreenGui", PlayerGui)
@@ -37,12 +38,14 @@ toggleButton.MouseButton1Click:Connect(function()
 	autoMoveEnabled = not autoMoveEnabled
 	toggleButton.Text = "AutoFarm: " .. (autoMoveEnabled and "ON" or "OFF")
 	if autoMoveEnabled then
-		Camera.CameraSubject = Humanoid
-		Camera.CameraType = Enum.CameraType.Custom
 		Humanoid.WalkSpeed = moveSpeed
 	else
+		if currentTween then
+			currentTween:Cancel()
+			currentTween = nil
+		end
+		Humanoid.WalkSpeed = 16
 		lastTarget = nil
-		Humanoid.WalkSpeed = 16 -- reset to default walk speed
 	end
 end)
 
@@ -55,14 +58,17 @@ local function noclip()
 	end
 end
 
--- Run noclip every frame while AutoFarm is enabled
 RunService.Stepped:Connect(function()
 	if autoMoveEnabled then
 		noclip()
+		-- Lock camera to humanoid
+		if Camera.CameraSubject ~= Humanoid then
+			Camera.CameraSubject = Humanoid
+			Camera.CameraType = Enum.CameraType.Custom
+		end
 	end
 end)
 
--- Filter folders
 local goblinArenaFolder = workspace:FindFirstChild("GoblinArena")
 local excludeFolders = {}
 if goblinArenaFolder then
@@ -140,37 +146,21 @@ local function getNearestUntouchedTouchPart()
 	return nearestPart
 end
 
-local function moveToPointAsync(targetPos)
-	if moving then return end
-	moving = true
+local function walkTo(targetPosition)
+	if currentTween then
+		currentTween:Cancel()
+		currentTween = nil
+	end
 
-	-- หันหน้าไปทางเป้าหมาย
-	HumanoidRootPart.CFrame = CFrame.new(HumanoidRootPart.Position, targetPos)
+	local distance = (HumanoidRootPart.Position - targetPosition).Magnitude
+	local travelTime = distance / moveSpeed
+	if travelTime < 0.1 then travelTime = 0.1 end
 
-	local reachedConnection
-	local timeout = 15
-	local timeoutConn
-
-	Humanoid:MoveTo(targetPos)
-
-	local reached = Instance.new("BindableEvent")
-
-	reachedConnection = Humanoid.MoveToFinished:Connect(function(success)
-		reached:Fire(success)
-	end)
-
-	timeoutConn = task.delay(timeout, function()
-		reached:Fire(false)
-	end)
-
-	local success = reached.Event:Wait()
-
-	reachedConnection:Disconnect()
-	timeoutConn:Cancel()
-	reached:Destroy()
-
-	moving = false
-	return success
+	local tweenInfo = TweenInfo.new(travelTime, Enum.EasingStyle.Linear)
+	currentTween = TweenService:Create(HumanoidRootPart, tweenInfo, {
+		CFrame = CFrame.new(targetPosition.X, HumanoidRootPart.Position.Y, targetPosition.Z)
+	})
+	currentTween:Play()
 end
 
 local isCircling = false
@@ -178,13 +168,12 @@ local isCircling = false
 local function circleAroundTarget(target)
 	if isCircling then return end
 	isCircling = true
-	Humanoid.AutoRotate = false
 
 	while autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
 		local touchPart = getNearestUntouchedTouchPart()
 		if touchPart then
 			touchedParts[touchPart] = true
-			local success = moveToPointAsync(touchPart.Position)
+			walkTo(touchPart.Position)
 			task.wait(3)
 			lastTarget = nil
 			break
@@ -194,25 +183,20 @@ local function circleAroundTarget(target)
 		local angle = tick() % (2 * math.pi)
 		local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
 		local goalPos = target.HumanoidRootPart.Position + offset
-
-		local success = moveToPointAsync(goalPos)
-		if not success then
-			break
-		end
+		walkTo(goalPos)
+		task.wait(0.1)
 	end
 
-	Humanoid.AutoRotate = true
 	isCircling = false
 end
 
--- Main loop
 task.spawn(function()
 	while true do
 		if autoMoveEnabled then
 			local touchPart = getNearestUntouchedTouchPart()
 			if touchPart then
 				touchedParts[touchPart] = true
-				moveToPointAsync(touchPart.Position)
+				walkTo(touchPart.Position)
 				task.wait(3)
 				lastTarget = nil
 			else

@@ -19,7 +19,6 @@ local autoMoveEnabled = false
 local touchedParts = {}
 local lastTarget = nil
 local currentTween = nil
-local isCircling = false
 
 -- GUI
 local gui = Instance.new("ScreenGui", PlayerGui)
@@ -118,63 +117,41 @@ local function getNearestUntouchedTouchPart()
 	return nearestPart
 end
 
-local function walkTo(targetPosition)
+local function walkTo(targetCFrame)
 	if currentTween then currentTween:Cancel() end
 
-	local distance = (HumanoidRootPart.Position - targetPosition).Magnitude
+	local distance = (HumanoidRootPart.Position - targetCFrame.Position).Magnitude
 	local travelTime = distance / moveSpeed
 
 	local tweenInfo = TweenInfo.new(travelTime, Enum.EasingStyle.Linear)
 	currentTween = TweenService:Create(HumanoidRootPart, tweenInfo, {
-		CFrame = CFrame.new(targetPosition)
+		CFrame = targetCFrame
 	})
 	currentTween:Play()
 end
 
-local function onTargetDied(target)
-	if target == lastTarget then
-		lastTarget = nil
-		isCircling = false
-	end
-end
-
+-- Move near target at 4 studs
 local function circleAroundTarget(target)
-	if isCircling then return end
-	isCircling = true
+	task.spawn(function()
+		while autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
+			local touchPart = getNearestUntouchedTouchPart()
+			if touchPart then
+				touchedParts[touchPart] = true
+				walkTo(touchPart.CFrame)
+				task.wait(3)
+				lastTarget = nil
+				return
+			end
 
-	-- ฟังชัน HealthChanged เพื่อตรวจจับมอนตาย
-	local humanoid = target:FindFirstChild("Humanoid")
-	local healthConn
-	healthConn = humanoid.HealthChanged:Connect(function(health)
-		if health <= 0 then
-			onTargetDied(target)
-			if healthConn then healthConn:Disconnect() end
+			local radius = 4
+			local angle = math.random() * 2 * math.pi
+			local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
+			local goalPos = target.HumanoidRootPart.Position + offset
+			local goalCFrame = CFrame.new(goalPos, target.HumanoidRootPart.Position)
+			walkTo(goalCFrame)
+			task.wait(0.05)
 		end
 	end)
-
-	while autoMoveEnabled and target and humanoid and humanoid.Health > 0 do
-		local touchPart = getNearestUntouchedTouchPart()
-		if touchPart then
-			touchedParts[touchPart] = true
-			walkTo(touchPart.Position)
-			task.wait(3)
-			lastTarget = nil
-			isCircling = false
-			if healthConn then healthConn:Disconnect() end
-			return
-		end
-
-		local radius = 5
-		local angle = tick() % (2 * math.pi)
-		local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
-		local goalPos = target.HumanoidRootPart.Position + offset
-		walkTo(goalPos)
-		task.wait(0.1)
-	end
-
-	lastTarget = nil
-	isCircling = false
-	if healthConn then healthConn:Disconnect() end
 end
 
 -- Lock camera to player
@@ -192,7 +169,7 @@ task.spawn(function()
 			local touchPart = getNearestUntouchedTouchPart()
 			if touchPart then
 				touchedParts[touchPart] = true
-				walkTo(touchPart.Position)
+				walkTo(touchPart.CFrame)
 				task.wait(3)
 				lastTarget = nil
 			else

@@ -29,12 +29,12 @@ toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 toggleButton.Font = Enum.Font.GothamBold
 toggleButton.TextSize = 20
-toggleButton.Text = "AutoMove: OFF"
+toggleButton.Text = "AutoFarm: OFF"
 toggleButton.Parent = gui
 
 toggleButton.MouseButton1Click:Connect(function()
 	autoMoveEnabled = not autoMoveEnabled
-	toggleButton.Text = "AutoMove: " .. (autoMoveEnabled and "ON" or "OFF")
+	toggleButton.Text = "AutoFarm: " .. (autoMoveEnabled and "ON" or "OFF")
 end)
 
 -- Filter folders
@@ -115,18 +115,24 @@ local function getNearestUntouchedTouchPart()
 	return nearestPart
 end
 
-local currentTween
+-- New walkTo using SetPrimaryPartCFrame
 local function walkTo(targetCFrame)
-	if currentTween then currentTween:Cancel() end
+	if Character.PrimaryPart == nil then
+		Character.PrimaryPart = HumanoidRootPart
+	end
 
-	local distance = (HumanoidRootPart.Position - targetCFrame.Position).Magnitude
+	local distance = (Character.PrimaryPart.Position - targetCFrame.Position).Magnitude
 	local travelTime = distance / moveSpeed
+	local startTime = tick()
 
-	local tweenInfo = TweenInfo.new(travelTime, Enum.EasingStyle.Linear)
-	currentTween = TweenService:Create(HumanoidRootPart, tweenInfo, {
-		CFrame = targetCFrame
-	})
-	currentTween:Play()
+	task.spawn(function()
+		while tick() - startTime < travelTime do
+			local alpha = (tick() - startTime) / travelTime
+			Character:SetPrimaryPartCFrame(Character.PrimaryPart.CFrame:Lerp(targetCFrame, alpha))
+			RunService.Heartbeat:Wait()
+		end
+		Character:SetPrimaryPartCFrame(targetCFrame)
+	end)
 end
 
 -- Circle around the target at 5 studs

@@ -1,6 +1,5 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
-local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -15,7 +14,7 @@ local touchedParts = {}
 local lastTarget = nil
 local currentTween = nil
 
--- GUI
+-- GUI Setup
 local gui = Instance.new("ScreenGui")
 gui.Name = "AutoMoveGUI"
 gui.Parent = PlayerGui
@@ -33,9 +32,14 @@ toggleButton.Parent = gui
 toggleButton.MouseButton1Click:Connect(function()
 	autoMoveEnabled = not autoMoveEnabled
 	toggleButton.Text = "AutoFarm: " .. (autoMoveEnabled and "ON" or "OFF")
+	if not autoMoveEnabled and currentTween then
+		currentTween:Cancel()
+		currentTween = nil
+		lastTarget = nil
+	end
 end)
 
--- Filter folders (excluded folders)
+-- Exclude folders and names
 local goblinArenaFolder = workspace:FindFirstChild("GoblinArena")
 local excludeFolders = {}
 if goblinArenaFolder then
@@ -61,6 +65,7 @@ local function isInExcludedFolder(npc)
 end
 
 local function isOnGround(part)
+	-- Raycast only once per call for efficiency
 	local raycastParams = RaycastParams.new()
 	raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
 	raycastParams.FilterDescendantsInstances = {part.Parent}
@@ -86,29 +91,32 @@ local function getAllTargets()
 
 	local targets = {}
 
-	for _, npc in pairs(workspace:GetDescendants()) do
-		if npc:IsA("Model") and npc ~= Character then
-			if isValidMob(npc) then
-				table.insert(targets, {
-					type = "mob",
-					object = npc,
-					distance = (worldSpawn.Position - npc.HumanoidRootPart.Position).Magnitude
-				})
-			end
-		end
-	end
+	-- Cache workspace descendants once
+	local descendants = workspace:GetDescendants()
 
-	for _, part in pairs(workspace:GetDescendants()) do
-		if part:IsA("BasePart") and part.Name:lower() == "touch" and not touchedParts[part] then
+	for i = 1, #descendants do
+		local obj = descendants[i]
+
+		if obj:IsA("Model") and obj ~= Character then
+			if isValidMob(obj) then
+				local hrp = obj:FindFirstChild("HumanoidRootPart")
+				if hrp then
+					table.insert(targets, {
+						type = "mob",
+						object = obj,
+						distance = (worldSpawn.Position - hrp.Position).Magnitude
+					})
+				end
+			end
+		elseif obj:IsA("BasePart") and obj.Name:lower() == "touch" and not touchedParts[obj] then
 			table.insert(targets, {
 				type = "touch",
-				object = part,
-				distance = (worldSpawn.Position - part.Position).Magnitude
+				object = obj,
+				distance = (worldSpawn.Position - obj.Position).Magnitude
 			})
 		end
 	end
 
-	-- sort by closest to farthest from world spawn
 	table.sort(targets, function(a, b)
 		return a.distance < b.distance
 	end)
@@ -117,56 +125,71 @@ local function getAllTargets()
 end
 
 local function walkTo(targetCFrame)
-	if currentTween then currentTween:Cancel() end
+	if currentTween then
+		currentTween:Cancel()
+		currentTween = nil
+	end
 
 	local distance = (HumanoidRootPart.Position - targetCFrame.Position).Magnitude
+	if distance < 0.1 then return end -- Skip if too close
+
 	local travelTime = distance / moveSpeed
+	if travelTime <= 0 then return end
 
 	local tweenInfo = TweenInfo.new(travelTime, Enum.EasingStyle.Linear)
-	currentTween = TweenService:Create(HumanoidRootPart, tweenInfo, {
-		CFrame = targetCFrame
-	})
+	currentTween = TweenService:Create(HumanoidRootPart, tweenInfo, {CFrame = targetCFrame})
 	currentTween:Play()
 end
 
--- Move near target at 4 studs
+local movingToTarget = false
+
 local function moveToTarget(targetModel)
-	task.spawn(function()
-		while autoMoveEnabled and targetModel and targetModel:FindFirstChild("Humanoid") and targetModel.Humanoid.Health > 0 do
-			local hrp = targetModel:FindFirstChild("HumanoidRootPart")
-			if not hrp then break end
-			local direction = (HumanoidRootPart.Position - hrp.Position)
-			if direction.Magnitude < 4 then break end
-			local offset = direction.Unit * 4
-			local goalPos = hrp.Position + offset
-			local goalCFrame = CFrame.new(goalPos, hrp.Position)
-			walkTo(goalCFrame)
-			task.wait(0.05)
-		end
-	end)
+	if movingToTarget then return end
+	movingToTarget = true
+
+	while autoMoveEnabled and targetModel and targetModel:FindFirstChild("Humanoid") and targetModel.Humanoid.Health > 0 do
+		local hrp = targetModel:FindFirstChild("HumanoidRootPart")
+		if not hrp then break end
+		local direction = (HumanoidRootPart.Position - hrp.Position)
+		if direction.Magnitude <= 4 then break end
+		local offset = direction.Unit * 4
+		local goalPos = hrp.Position + offset
+		local goalCFrame = CFrame.new(goalPos, hrp.Position)
+		walkTo(goalCFrame)
+		task.wait(0.1)
+	end
+
+	movingToTarget = false
 end
 
--- Main loop
-task.spawn(function()
-	while true do
-		if autoMoveEnabled then
-			local targets = getAllTargets()
-			local selected = targets[1]
+-- Main loop optimized with RunService.Heartbeat for smooth updates
+RunService.Heartbeat:Connect(function(deltaTime)
+	if autoMoveEnabled then
+		local targets = getAllTargets()
+		local selected = targets[1]
 
-			if selected then
-				if selected.type == "mob" then
-					if selected.object ~= lastTarget then
-						lastTarget = selected.object
-						moveToTarget(selected.object)
-					end
-				elseif selected.type == "touch" then
-					touchedParts[selected.object] = true
-					walkTo(selected.object.CFrame)
-					task.wait(3)
-					lastTarget = nil
+		if selected then
+			if selected.type == "mob" then
+				if selected.object ~= lastTarget then
+					lastTarget = selected.object
+					moveToTarget(selected.object)
 				end
+			elseif selected.type == "touch" then
+				touchedParts[selected.object] = true
+				if currentTween then
+					currentTween:Cancel()
+					currentTween = nil
+				end
+				walkTo(selected.object.CFrame)
+				task.wait(3)
+				lastTarget = nil
 			end
 		end
-		task.wait(0.05)
+	else
+		if currentTween then
+			currentTween:Cancel()
+			currentTween = nil
+		end
+		lastTarget = nil
 	end
 end)

@@ -11,10 +11,11 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = guiParent
 
 local isMinimized = false
+local killRadius = 65
 
 -- เฟรมหลัก
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 240, 0, 360)
+mainFrame.Size = UDim2.new(0, 260, 0, 420)
 mainFrame.Position = UDim2.new(0, 20, 0, 100)
 mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 mainFrame.BorderSizePixel = 0
@@ -55,8 +56,50 @@ statusLabel.TextSize = 18
 statusLabel.TextXAlignment = Enum.TextXAlignment.Left
 statusLabel.Parent = mainFrame
 
+-- Kill Radius Slider
+local radiusLabel = Instance.new("TextLabel")
+radiusLabel.Size = UDim2.new(1, -20, 0, 20)
+radiusLabel.Position = UDim2.new(0, 10, 0, 65)
+radiusLabel.BackgroundTransparency = 1
+radiusLabel.Text = "Kill Radius: " .. killRadius .. " studs"
+radiusLabel.TextColor3 = Color3.new(1, 1, 1)
+radiusLabel.Font = Enum.Font.SourceSans
+radiusLabel.TextSize = 16
+radiusLabel.TextXAlignment = Enum.TextXAlignment.Left
+radiusLabel.Parent = mainFrame
+
+local radiusSlider = Instance.new("IntValue")
+radiusSlider.Value = killRadius
+
+local slider = Instance.new("TextButton")
+slider.Size = UDim2.new(1, -20, 0, 20)
+slider.Position = UDim2.new(0, 10, 0, 90)
+slider.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+slider.Text = ""
+slider.AutoButtonColor = false
+slider.Parent = mainFrame
+
+local UIS = game:GetService("UserInputService")
+local dragging = false
+slider.MouseButton1Down:Connect(function()
+	dragging = true
+end)
+UIS.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = false
+	end
+end)
+RunService.RenderStepped:Connect(function()
+	if dragging then
+		local mouseX = UIS:GetMouseLocation().X
+		local relX = math.clamp(mouseX - slider.AbsolutePosition.X, 0, slider.AbsoluteSize.X)
+		killRadius = math.floor((relX / slider.AbsoluteSize.X) * 65)
+		radiusLabel.Text = "Kill Radius: " .. killRadius .. " studs"
+	end
+end)
+
 -- ปุ่มและสถานะ
-local buttonY = 70
+local buttonY = 120
 local function createButton(name)
 	local btn = Instance.new("TextButton")
 	btn.Size = UDim2.new(1, -20, 0, 30)
@@ -76,13 +119,6 @@ local allButtons = {}
 toggleButton.MouseButton1Click:Connect(function()
 	isMinimized = not isMinimized
 	toggleButton.Text = isMinimized and "+" or "-"
-
-	if isMinimized then
-		mainFrame.Size = UDim2.new(0, 240, 0, 40)
-	else
-		mainFrame.Size = UDim2.new(0, 240, 0, 360)
-	end
-
 	for _, c in pairs(mainFrame:GetChildren()) do
 		if c:IsA("TextButton") and c ~= toggleButton then
 			c.Visible = not isMinimized
@@ -90,33 +126,6 @@ toggleButton.MouseButton1Click:Connect(function()
 		if c:IsA("TextLabel") and c ~= titleLabel then
 			c.Visible = not isMinimized
 		end
-	end
-end)
-
--- ปุ่ม Start Loop 1-11
-local btnStartLoop = createButton("Start Loop")
-local loopState = false
-btnStartLoop.MouseButton1Click:Connect(function()
-	loopState = not loopState
-	btnStartLoop.Text = "Start Loop" .. (loopState and " [ON]" or " [OFF]")
-	if loopState then
-		statusLabel.Text = "Start Loop: ทำงานอยู่"
-		coroutine.wrap(function()
-			while loopState do
-				for i = 1, 11 do
-					local args = {
-						"\233\162\134\229\143\150\229\156\168\231\186\191\229\165\150\229\138\177",
-						i
-					}
-					pcall(function()
-						game:GetService("ReplicatedStorage"):WaitForChild("Msg"):WaitForChild("RemoteFunction"):InvokeServer(unpack(args))
-					end)
-					task.wait(10)
-				end
-			end
-		end)()
-	else
-		statusLabel.Text = "Start Loop: หยุดแล้ว"
 	end
 end)
 
@@ -149,7 +158,7 @@ local function startMode(name, fireArgsFunc, fallbackArgs)
 		local timer = 0
 		while activeModes[name] do
 			timer += 0.5
-			local target = getClosestPlayer(65)
+			local target = getClosestPlayer(killRadius)
 			if target then
 				fireArgsFunc(target)
 				statusLabel.Text = name .. ": โจมตี " .. target.Name
@@ -184,6 +193,55 @@ local function bindButton(button, name, fireArgsFunc, fallbackArgs)
 		end
 	end)
 end
+
+-- ปุ่ม Start Loop 1-11
+local btnStartLoop = createButton("Start Loop")
+local loopState = false
+btnStartLoop.MouseButton1Click:Connect(function()
+	loopState = not loopState
+	btnStartLoop.Text = "Start Loop" .. (loopState and " [ON]" or " [OFF]")
+	if loopState then
+		statusLabel.Text = "Start Loop: ทำงานอยู่"
+		coroutine.wrap(function()
+			local originalPos = nil
+			while loopState do
+				local lp = game.Players.LocalPlayer
+				local char = lp.Character
+				if char and char:FindFirstChild("Humanoid") and char:FindFirstChild("HumanoidRootPart") then
+					local hp = char.Humanoid.Health
+					local maxHp = char.Humanoid.MaxHealth
+					if hp < maxHp * 0.7 then
+						if not originalPos then
+							originalPos = char.HumanoidRootPart.Position
+						end
+						char:MoveTo(Vector3.new(0, 175, 17))
+					elseif originalPos and hp >= maxHp then
+						char:MoveTo(originalPos)
+						originalPos = nil
+					end
+				end
+				task.wait(0.5)
+			end
+		end)()
+
+		coroutine.wrap(function()
+			while loopState do
+				for i = 1, 11 do
+					local args = {
+						"\233\162\134\229\143\150\229\156\168\231\186\191\229\165\150\229\138\177",
+						i
+					}
+					pcall(function()
+						game:GetService("ReplicatedStorage"):WaitForChild("Msg"):WaitForChild("RemoteFunction"):InvokeServer(unpack(args))
+					end)
+					task.wait(10)
+				end
+			end
+		end)()
+	else
+		statusLabel.Text = "Start Loop: หยุดแล้ว"
+	end
+end)
 
 -- ปุ่มหลักทั้งหมด
 local btnLoopKill = createButton("Loop Kill")

@@ -61,8 +61,9 @@ local function getAllTargetsSortedByDistance()
 			and npc.Humanoid.Health > 0
 			and not excludedNames[npc.Name]
 			and isOnGround(npc.HumanoidRootPart)
-			and not visitedTargets[npc] then
-
+			and not visitedTargets[npc]
+			and Players:GetPlayerFromCharacter(npc) == nil -- กรองไม่ให้เจอผู้เล่น
+		then
 			table.insert(targets, {
 				type = "mob",
 				object = npc,
@@ -112,9 +113,8 @@ local function orbitTarget(target)
 	while orbiting and autoMoveEnabled and target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 do
 		if not target:FindFirstChild("HumanoidRootPart") then break end
 
-		-- หมุนตามวงกลม
 		local center = target.HumanoidRootPart.Position
-		angle += math.rad(30) -- ปรับความเร็วหมุน
+		angle += math.rad(30)
 		if angle >= math.pi * 2 then angle = angle - math.pi * 2 end
 
 		local offsetX = math.cos(angle) * orbitRadius
@@ -127,7 +127,6 @@ local function orbitTarget(target)
 	end
 end
 
--- Main loop
 local function mainLoop()
 	while true do
 		if autoMoveEnabled then

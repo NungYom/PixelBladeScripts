@@ -1,0 +1,54 @@
+-- GUI สร้างปุ่ม Start/Stop
+local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
+local ToggleButton = Instance.new("TextButton", ScreenGui)
+
+ToggleButton.Size = UDim2.new(0, 120, 0, 40)
+ToggleButton.Position = UDim2.new(0, 20, 0, 20)
+ToggleButton.Text = "StartLoop"
+ToggleButton.BackgroundColor3 = Color3.fromRGB(60, 180, 75)
+ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleButton.Font = Enum.Font.SourceSansBold
+ToggleButton.TextSize = 20
+
+-- ตัวแปรควบคุม Loop
+local looping = false
+local coroutineThread
+
+-- ฟังก์ชันส่งข้อมูลไปยัง RemoteFunction
+local function sendInvoke(index)
+    local args = {
+        "\233\162\134\229\143\150\229\156\168\231\186\191\229\165\150\229\138\177",
+        index
+    }
+    local success, err = pcall(function()
+        game:GetService("ReplicatedStorage"):WaitForChild("Msg"):WaitForChild("RemoteFunction"):InvokeServer(unpack(args))
+    end)
+    if not success then
+        warn("InvokeServer failed at index " .. index .. ": " .. tostring(err))
+    end
+end
+
+-- ฟังก์ชันรันวน
+local function startLoop()
+    coroutineThread = coroutine.create(function()
+        while looping do
+            for i = 1, 11 do
+                if not looping then break end
+                sendInvoke(i)
+                wait(1) -- เปลี่ยนจาก 10 เป็น 1 วินาที
+            end
+        end
+    end)
+    coroutine.resume(coroutineThread)
+end
+
+-- ปุ่มกดสลับเปิด/ปิด Loop
+ToggleButton.MouseButton1Click:Connect(function()
+    looping = not looping
+    ToggleButton.Text = looping and "StopLoop" or "StartLoop"
+    ToggleButton.BackgroundColor3 = looping and Color3.fromRGB(220, 50, 47) or Color3.fromRGB(60, 180, 75)
+
+    if looping then
+        startLoop()
+    end
+end)

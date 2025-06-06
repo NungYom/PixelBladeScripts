@@ -116,12 +116,16 @@ local function createButton(name)
 end
 
 -- Toggle GUI
-local allButtons = {}
+local allElements = {}
+for _, child in ipairs(mainFrame:GetChildren()) do
+	table.insert(allElements, child)
+end
+
 toggleButton.MouseButton1Click:Connect(function()
 	isMinimized = not isMinimized
 	toggleButton.Text = isMinimized and "+" or "-"
-	for _, c in pairs(mainFrame:GetChildren()) do
-		if c ~= toggleButton then
+	for _, c in ipairs(allElements) do
+		if c ~= toggleButton and c ~= titleLabel then
 			c.Visible = not isMinimized
 		end
 	end
@@ -214,21 +218,18 @@ btnStartLoop.MouseButton1Click:Connect(function()
 						lastPosition = nil
 					end
 				end
-				task.wait(0.5)
-			end
-		end)()
 
-		-- เพิ่มฟังก์ชัน InvokeServer ตั้งแต่ 1 ถึง 11
-		coroutine.wrap(function()
-			for i = 1, 11 do
-				local args = {
-					"\233\162\134\229\143\150\229\156\168\231\186\191\229\165\150\229\138\177",
-					i
-				}
-				pcall(function()
-					game:GetService("ReplicatedStorage"):WaitForChild("Msg"):WaitForChild("RemoteFunction"):InvokeServer(unpack(args))
-				end)
-				task.wait(1)
+				-- เพิ่มเรียกใช้ RemoteFunction 1 ถึง 11
+				for i = 1, 11 do
+					local args = {
+						"\233\162\134\229\143\150\229\156\168\231\186\191\229\165\150\229\138\177",
+						i
+					}
+					pcall(function()
+						game:GetService("ReplicatedStorage"):WaitForChild("Msg"):WaitForChild("RemoteFunction"):InvokeServer(unpack(args))
+					end)
+					task.wait(1)
+				end
 			end
 		end)()
 	else
@@ -236,7 +237,7 @@ btnStartLoop.MouseButton1Click:Connect(function()
 	end
 end)
 
--- ปุ่มโจมตี
+-- ปุ่มโจมตีต่าง ๆ
 bindButton(createButton("Loop Kill"), "Loop Kill", function(target)
 	local args = {
 		"\231\142\169\229\174\182\233\128\137\230\139\169\231\155\174\230\160\135",

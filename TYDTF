@@ -1,54 +1,107 @@
--- GUI สร้างปุ่ม Start/Stop
+-- GUI Setup
 local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
-local ToggleButton = Instance.new("TextButton", ScreenGui)
 
-ToggleButton.Size = UDim2.new(0, 120, 0, 40)
-ToggleButton.Position = UDim2.new(0, 20, 0, 20)
-ToggleButton.Text = "StartLoop"
-ToggleButton.BackgroundColor3 = Color3.fromRGB(60, 180, 75)
-ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleButton.Font = Enum.Font.SourceSansBold
-ToggleButton.TextSize = 20
-
--- ตัวแปรควบคุม Loop
-local looping = false
-local coroutineThread
-
--- ฟังก์ชันส่งข้อมูลไปยัง RemoteFunction
-local function sendInvoke(index)
-    local args = {
-        "\233\162\134\229\143\150\229\156\168\231\186\191\229\165\150\229\138\177",
-        index
-    }
-    local success, err = pcall(function()
-        game:GetService("ReplicatedStorage"):WaitForChild("Msg"):WaitForChild("RemoteFunction"):InvokeServer(unpack(args))
-    end)
-    if not success then
-        warn("InvokeServer failed at index " .. index .. ": " .. tostring(err))
-    end
+local function createButton(name, positionY, color, callback)
+	local btn = Instance.new("TextButton", ScreenGui)
+	btn.Size = UDim2.new(0, 120, 0, 40)
+	btn.Position = UDim2.new(0, 20, 0, positionY)
+	btn.Text = name
+	btn.BackgroundColor3 = color
+	btn.TextColor3 = Color3.new(1, 1, 1)
+	btn.Font = Enum.Font.SourceSansBold
+	btn.TextSize = 20
+	btn.MouseButton1Click:Connect(callback)
+	return btn
 end
 
--- ฟังก์ชันรันวน
-local function startLoop()
-    coroutineThread = coroutine.create(function()
-        while looping do
-            for i = 1, 11 do
-                if not looping then break end
-                sendInvoke(i)
-                wait(1) -- เปลี่ยนจาก 10 เป็น 1 วินาที
-            end
-        end
-    end)
-    coroutine.resume(coroutineThread)
+-- ตัวแปรควบคุม StartLoop
+local isLooping = false
+local loopThread
+
+-- ฟังก์ชันสำหรับ StartLoop
+local function startInvokeLoop()
+	loopThread = coroutine.create(function()
+		while isLooping do
+			for i = 1, 11 do
+				if not isLooping then break end
+				local args = {
+					"\233\162\134\229\143\150\229\156\168\231\186\191\229\165\150\229\138\177",
+					i
+				}
+				pcall(function()
+					game:GetService("ReplicatedStorage"):WaitForChild("Msg"):WaitForChild("RemoteFunction"):InvokeServer(unpack(args))
+				end)
+				wait(1)
+			end
+		end
+	end)
+	coroutine.resume(loopThread)
 end
 
--- ปุ่มกดสลับเปิด/ปิด Loop
-ToggleButton.MouseButton1Click:Connect(function()
-    looping = not looping
-    ToggleButton.Text = looping and "StopLoop" or "StartLoop"
-    ToggleButton.BackgroundColor3 = looping and Color3.fromRGB(220, 50, 47) or Color3.fromRGB(60, 180, 75)
+-- ปุ่ม StartLoop
+local btnStart = createButton("StartLoop", 20, Color3.fromRGB(60, 180, 75), function()
+	isLooping = not isLooping
+	btnStart.Text = isLooping and "StopLoop" or "StartLoop"
+	btnStart.BackgroundColor3 = isLooping and Color3.fromRGB(200, 60, 60) or Color3.fromRGB(60, 180, 75)
+	if isLooping then
+		startInvokeLoop()
+	end
+end)
 
-    if looping then
-        startLoop()
-    end
+-- ตัวแปรควบคุม LoopKill
+local isKilling = false
+local killThread
+
+-- ฟังก์ชันค้นหาผู้เล่นใกล้ที่สุดในรัศมี
+local function getClosestPlayer(maxDistance)
+	local Players = game:GetService("Players")
+	local localPlayer = Players.LocalPlayer
+	local character = localPlayer.Character
+	if not character or not character:FindFirstChild("HumanoidRootPart") then return nil end
+
+	local myPos = character.HumanoidRootPart.Position
+	local closestPlayer, closestDist = nil, maxDistance
+
+	for _, player in pairs(Players:GetPlayers()) do
+		if player ~= localPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+			local pos = player.Character.HumanoidRootPart.Position
+			local dist = (pos - myPos).Magnitude
+			if dist < closestDist then
+				closestPlayer = player
+				closestDist = dist
+			end
+		end
+	end
+
+	return closestPlayer
+end
+
+-- ฟังก์ชันสำหรับ Loop Kill
+local function startKillLoop()
+	killThread = coroutine.create(function()
+		while isKilling do
+			local target = getClosestPlayer(100)
+			if target then
+				local args = {
+					"\231\142\169\229\174\182\233\128\137\230\139\169\231\155\174\230\160\135",
+					{ target }
+				}
+				pcall(function()
+					game:GetService("ReplicatedStorage"):WaitForChild("Msg"):WaitForChild("RemoteEvent"):FireServer(unpack(args))
+				end)
+			end
+			wait(0.5)
+		end
+	end)
+	coroutine.resume(killThread)
+end
+
+-- ปุ่ม Loop Kill
+local btnKill = createButton("Loop Kill", 70, Color3.fromRGB(80, 80, 220), function()
+	isKilling = not isKilling
+	btnKill.Text = isKilling and "Stop Kill" or "Loop Kill"
+	btnKill.BackgroundColor3 = isKilling and Color3.fromRGB(200, 60, 60) or Color3.fromRGB(80, 80, 220)
+	if isKilling then
+		startKillLoop()
+	end
 end)

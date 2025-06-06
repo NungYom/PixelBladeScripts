@@ -1,5 +1,10 @@
--- Parent GUI ให้เหมาะกับ executor
+-- Executor-safe GUI Parent
 local guiParent = gethui and gethui() or game:FindFirstChild("CoreGui") or game.Players.LocalPlayer:WaitForChild("PlayerGui")
+
+-- Clear GUI ก่อน (กันซ้อน)
+if guiParent:FindFirstChild("ExecutorUI") then
+    guiParent:FindFirstChild("ExecutorUI"):Destroy()
+end
 
 -- สร้าง GUI
 local ScreenGui = Instance.new("ScreenGui")
@@ -7,22 +12,35 @@ ScreenGui.Name = "ExecutorUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = guiParent
 
+-- ป้ายสถานะ
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(0, 200, 0, 30)
+statusLabel.Position = UDim2.new(0, 20, 0, 0)
+statusLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+statusLabel.TextColor3 = Color3.new(1, 1, 1)
+statusLabel.Font = Enum.Font.SourceSansBold
+statusLabel.TextSize = 20
+statusLabel.Text = "สถานะ: หยุดทั้งหมด"
+statusLabel.Parent = ScreenGui
+
 -- ฟังก์ชันสร้างปุ่ม
 local function createButton(name, posY, color, callback)
 	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(0, 120, 0, 40)
+	btn.Size = UDim2.new(0, 150, 0, 40)
 	btn.Position = UDim2.new(0, 20, 0, posY)
-	btn.Text = name
+	btn.Text = name .. " [OFF]"
 	btn.BackgroundColor3 = color
 	btn.TextColor3 = Color3.new(1, 1, 1)
 	btn.Font = Enum.Font.SourceSansBold
 	btn.TextSize = 20
 	btn.Parent = ScreenGui
-	btn.MouseButton1Click:Connect(callback)
+	btn.MouseButton1Click:Connect(function()
+		callback(btn)
+	end)
 	return btn
 end
 
--- ========== ฟีเจอร์ 1: StartLoop ==========
+-- ========== StartLoop ==========
 local isLooping = false
 local loopThread
 
@@ -45,40 +63,39 @@ local function startInvokeLoop()
 	coroutine.resume(loopThread)
 end
 
-local btnStart = createButton("StartLoop", 0.05, Color3.fromRGB(60, 180, 75), function()
+local btnStart = createButton("StartLoop", 0.07, Color3.fromRGB(60, 180, 75), function(btn)
 	isLooping = not isLooping
-	btnStart.Text = isLooping and "StopLoop" or "StartLoop"
-	btnStart.BackgroundColor3 = isLooping and Color3.fromRGB(200, 60, 60) or Color3.fromRGB(60, 180, 75)
+	btn.Text = "StartLoop [" .. (isLooping and "ON" or "OFF") .. "]"
+	statusLabel.Text = "สถานะ: " .. (isLooping and "StartLoop ทำงาน" or "หยุด StartLoop")
 	if isLooping then
 		startInvokeLoop()
 	end
 end)
 
--- ========== ฟีเจอร์ 2: Loop Kill ==========
+-- ========== Loop Kill ==========
 local isKilling = false
 local killThread
 
 local function getClosestPlayer(radius)
-	local Players = game:GetService("Players")
-	local lp = Players.LocalPlayer
-	local myChar = lp.Character
-	if not (myChar and myChar:FindFirstChild("HumanoidRootPart")) then return nil end
+	local lp = game.Players.LocalPlayer
+	local char = lp.Character
+	if not (char and char:FindFirstChild("HumanoidRootPart")) then return nil end
 
-	local myPos = myChar.HumanoidRootPart.Position
-	local closestPlayer = nil
-	local closestDist = radius
+	local myPos = char.HumanoidRootPart.Position
+	local closest = nil
+	local minDist = radius
 
-	for _, p in ipairs(Players:GetPlayers()) do
+	for _, p in ipairs(game.Players:GetPlayers()) do
 		if p ~= lp and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
 			local dist = (p.Character.HumanoidRootPart.Position - myPos).Magnitude
-			if dist < closestDist then
-				closestDist = dist
-				closestPlayer = p
+			if dist < minDist then
+				minDist = dist
+				closest = p
 			end
 		end
 	end
 
-	return closestPlayer
+	return closest
 end
 
 local function startKillLoop()
@@ -92,6 +109,9 @@ local function startKillLoop()
 						{ target }
 					}
 					game:GetService("ReplicatedStorage"):WaitForChild("Msg"):WaitForChild("RemoteEvent"):FireServer(unpack(args))
+					statusLabel.Text = "Loop Kill กำลังโจมตี: " .. target.Name
+				else
+					statusLabel.Text = "Loop Kill: ไม่พบเป้าหมาย"
 				end
 			end)
 			wait(0.5)
@@ -100,10 +120,10 @@ local function startKillLoop()
 	coroutine.resume(killThread)
 end
 
-local btnKill = createButton("Loop Kill", 0.15, Color3.fromRGB(80, 80, 220), function()
+local btnKill = createButton("Loop Kill", 0.14, Color3.fromRGB(80, 80, 220), function(btn)
 	isKilling = not isKilling
-	btnKill.Text = isKilling and "Stop Kill" or "Loop Kill"
-	btnKill.BackgroundColor3 = isKilling and Color3.fromRGB(200, 60, 60) or Color3.fromRGB(80, 80, 220)
+	btn.Text = "Loop Kill [" .. (isKilling and "ON" or "OFF") .. "]"
+	statusLabel.Text = "สถานะ: " .. (isKilling and "Loop Kill ทำงาน" or "หยุด Loop Kill")
 	if isKilling then
 		startKillLoop()
 	end

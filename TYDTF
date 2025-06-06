@@ -11,11 +11,10 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = guiParent
 
 local isMinimized = false
-local killRadius = 65
 
 -- เฟรมหลัก
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 260, 0, 420)
+mainFrame.Size = UDim2.new(0, 240, 0, 420)
 mainFrame.Position = UDim2.new(0, 20, 0, 100)
 mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 mainFrame.BorderSizePixel = 0
@@ -56,50 +55,52 @@ statusLabel.TextSize = 18
 statusLabel.TextXAlignment = Enum.TextXAlignment.Left
 statusLabel.Parent = mainFrame
 
--- Kill Radius Slider
-local radiusLabel = Instance.new("TextLabel")
-radiusLabel.Size = UDim2.new(1, -20, 0, 20)
-radiusLabel.Position = UDim2.new(0, 10, 0, 65)
-radiusLabel.BackgroundTransparency = 1
-radiusLabel.Text = "Kill Radius: " .. killRadius .. " studs"
-radiusLabel.TextColor3 = Color3.new(1, 1, 1)
-radiusLabel.Font = Enum.Font.SourceSans
-radiusLabel.TextSize = 16
-radiusLabel.TextXAlignment = Enum.TextXAlignment.Left
-radiusLabel.Parent = mainFrame
-
-local radiusSlider = Instance.new("IntValue")
-radiusSlider.Value = killRadius
+-- Slide bar: Kill Radius
+local radiusValue = 65
+local sliderLabel = Instance.new("TextLabel")
+sliderLabel.Size = UDim2.new(1, -20, 0, 25)
+sliderLabel.Position = UDim2.new(0, 10, 0, 70)
+sliderLabel.BackgroundTransparency = 1
+sliderLabel.TextColor3 = Color3.new(1, 1, 1)
+sliderLabel.Font = Enum.Font.SourceSans
+sliderLabel.TextSize = 18
+sliderLabel.TextXAlignment = Enum.TextXAlignment.Left
+sliderLabel.Text = "Kill Radius: " .. radiusValue
+sliderLabel.Parent = mainFrame
 
 local slider = Instance.new("TextButton")
 slider.Size = UDim2.new(1, -20, 0, 20)
-slider.Position = UDim2.new(0, 10, 0, 90)
-slider.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+slider.Position = UDim2.new(0, 10, 0, 95)
+slider.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
 slider.Text = ""
-slider.AutoButtonColor = false
 slider.Parent = mainFrame
 
-local UIS = game:GetService("UserInputService")
-local dragging = false
+local fill = Instance.new("Frame")
+fill.Size = UDim2.new(radiusValue / 65, 0, 1, 0)
+fill.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+fill.BorderSizePixel = 0
+fill.Parent = slider
+
 slider.MouseButton1Down:Connect(function()
-	dragging = true
-end)
-UIS.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		dragging = false
-	end
-end)
-RunService.RenderStepped:Connect(function()
-	if dragging then
-		local mouseX = UIS:GetMouseLocation().X
-		local relX = math.clamp(mouseX - slider.AbsolutePosition.X, 0, slider.AbsoluteSize.X)
-		killRadius = math.floor((relX / slider.AbsoluteSize.X) * 65)
-		radiusLabel.Text = "Kill Radius: " .. killRadius .. " studs"
-	end
+	local uis = game:GetService("UserInputService")
+	local conn
+	conn = uis.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement then
+			local x = math.clamp((input.Position.X - slider.AbsolutePosition.X) / slider.AbsoluteSize.X, 0, 1)
+			radiusValue = math.floor(x * 65)
+			fill.Size = UDim2.new(x, 0, 1, 0)
+			sliderLabel.Text = "Kill Radius: " .. radiusValue
+		end
+	end)
+	uis.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			conn:Disconnect()
+		end
+	end)
 end)
 
 -- ปุ่มและสถานะ
-local buttonY = 120
+local buttonY = 125
 local function createButton(name)
 	local btn = Instance.new("TextButton")
 	btn.Size = UDim2.new(1, -20, 0, 30)
@@ -158,7 +159,7 @@ local function startMode(name, fireArgsFunc, fallbackArgs)
 		local timer = 0
 		while activeModes[name] do
 			timer += 0.5
-			local target = getClosestPlayer(killRadius)
+			local target = getClosestPlayer(radiusValue)
 			if target then
 				fireArgsFunc(target)
 				statusLabel.Text = name .. ": โจมตี " .. target.Name
@@ -194,7 +195,7 @@ local function bindButton(button, name, fireArgsFunc, fallbackArgs)
 	end)
 end
 
--- ปุ่ม Start Loop 1-11
+-- ปุ่ม Start Loop
 local btnStartLoop = createButton("Start Loop")
 local loopState = false
 btnStartLoop.MouseButton1Click:Connect(function()
@@ -202,22 +203,18 @@ btnStartLoop.MouseButton1Click:Connect(function()
 	btnStartLoop.Text = "Start Loop" .. (loopState and " [ON]" or " [OFF]")
 	if loopState then
 		statusLabel.Text = "Start Loop: ทำงานอยู่"
+		local lastPosition = nil
 		coroutine.wrap(function()
-			local originalPos = nil
 			while loopState do
-				local lp = game.Players.LocalPlayer
-				local char = lp.Character
-				if char and char:FindFirstChild("Humanoid") and char:FindFirstChild("HumanoidRootPart") then
-					local hp = char.Humanoid.Health
-					local maxHp = char.Humanoid.MaxHealth
-					if hp < maxHp * 0.7 then
-						if not originalPos then
-							originalPos = char.HumanoidRootPart.Position
-						end
-						char:MoveTo(Vector3.new(0, 175, 17))
-					elseif originalPos and hp >= maxHp then
-						char:MoveTo(originalPos)
-						originalPos = nil
+				local humanoid = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid")
+				if humanoid then
+					local hp = humanoid.Health / humanoid.MaxHealth
+					if hp < 0.7 then
+						lastPosition = game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart").Position
+						game.Players.LocalPlayer.Character:MoveTo(Vector3.new(0, 175, 17))
+					elseif hp == 1 and lastPosition then
+						game.Players.LocalPlayer.Character:MoveTo(lastPosition)
+						lastPosition = nil
 					end
 				end
 				task.wait(0.5)
@@ -243,9 +240,8 @@ btnStartLoop.MouseButton1Click:Connect(function()
 	end
 end)
 
--- ปุ่มหลักทั้งหมด
-local btnLoopKill = createButton("Loop Kill")
-bindButton(btnLoopKill, "Loop Kill", function(target)
+-- ปุ่มโจมตี
+bindButton(createButton("Loop Kill"), "Loop Kill", function(target)
 	local args = {
 		"\231\142\169\229\174\182\233\128\137\230\139\169\231\155\174\230\160\135",
 		{target}
@@ -255,8 +251,7 @@ bindButton(btnLoopKill, "Loop Kill", function(target)
 	end)
 end)
 
-local btnFarmAttack = createButton("Farm Attack")
-bindButton(btnFarmAttack, "Farm Attack", function(target)
+bindButton(createButton("Farm Attack"), "Farm Attack", function(target)
 	local args = {
 		"\231\142\169\229\174\182\233\128\137\230\139\169\231\155\174\230\160\135",
 		{target}
@@ -269,8 +264,7 @@ end, {
 	"12"
 })
 
-local btnFarmPower = createButton("Farm Power")
-bindButton(btnFarmPower, "Farm Power", function(target)
+bindButton(createButton("Farm Power"), "Farm Power", function(target)
 	local args = {
 		"\231\142\169\229\174\182\233\128\137\230\139\169\231\155\174\230\160\135",
 		{target}
@@ -283,8 +277,7 @@ end, {
 	"10"
 })
 
-local btnFarmQuick = createButton("Farm Quick")
-bindButton(btnFarmQuick, "Farm Quick", function(target)
+bindButton(createButton("Farm Quick"), "Farm Quick", function(target)
 	local args = {
 		"\231\142\169\229\174\182\233\128\137\230\139\169\231\155\174\230\160\135",
 		{target}

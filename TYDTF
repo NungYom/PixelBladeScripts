@@ -76,6 +76,13 @@ local allButtons = {}
 toggleButton.MouseButton1Click:Connect(function()
 	isMinimized = not isMinimized
 	toggleButton.Text = isMinimized and "+" or "-"
+
+	if isMinimized then
+		mainFrame.Size = UDim2.new(0, 240, 0, 40)
+	else
+		mainFrame.Size = UDim2.new(0, 240, 0, 360)
+	end
+
 	for _, c in pairs(mainFrame:GetChildren()) do
 		if c:IsA("TextButton") and c ~= toggleButton then
 			c.Visible = not isMinimized
@@ -83,6 +90,33 @@ toggleButton.MouseButton1Click:Connect(function()
 		if c:IsA("TextLabel") and c ~= titleLabel then
 			c.Visible = not isMinimized
 		end
+	end
+end)
+
+-- ปุ่ม Start Loop 1-11
+local btnStartLoop = createButton("Start Loop")
+local loopState = false
+btnStartLoop.MouseButton1Click:Connect(function()
+	loopState = not loopState
+	btnStartLoop.Text = "Start Loop" .. (loopState and " [ON]" or " [OFF]")
+	if loopState then
+		statusLabel.Text = "Start Loop: ทำงานอยู่"
+		coroutine.wrap(function()
+			while loopState do
+				for i = 1, 11 do
+					local args = {
+						"\233\162\134\229\143\150\229\156\168\231\186\191\229\165\150\229\138\177",
+						i
+					}
+					pcall(function()
+						game:GetService("ReplicatedStorage"):WaitForChild("Msg"):WaitForChild("RemoteFunction"):InvokeServer(unpack(args))
+					end)
+					task.wait(10)
+				end
+			end
+		end)()
+	else
+		statusLabel.Text = "Start Loop: หยุดแล้ว"
 	end
 end)
 
@@ -150,33 +184,6 @@ local function bindButton(button, name, fireArgsFunc, fallbackArgs)
 		end
 	end)
 end
-
--- ปุ่ม Start Loop 1-11
-local btnStartLoop = createButton("Start Loop")
-local loopState = false
-btnStartLoop.MouseButton1Click:Connect(function()
-	loopState = not loopState
-	btnStartLoop.Text = "Start Loop" .. (loopState and " [ON]" or " [OFF]")
-	if loopState then
-		statusLabel.Text = "Start Loop: ทำงานอยู่"
-		coroutine.wrap(function()
-			while loopState do
-				for i = 1, 11 do
-					local args = {
-						"\233\162\134\229\143\150\229\156\168\231\186\191\229\165\150\229\138\177",
-						i
-					}
-					pcall(function()
-						game:GetService("ReplicatedStorage"):WaitForChild("Msg"):WaitForChild("RemoteFunction"):InvokeServer(unpack(args))
-					end)
-					task.wait(10)
-				end
-			end
-		end)()
-	else
-		statusLabel.Text = "Start Loop: หยุดแล้ว"
-	end
-end)
 
 -- ปุ่มหลักทั้งหมด
 local btnLoopKill = createButton("Loop Kill")

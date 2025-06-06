@@ -1,24 +1,31 @@
--- GUI Setup
-local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
+-- รองรับ GUI ใน Executor
+local guiParent = gethui and gethui() or game:FindFirstChild("CoreGui") or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
 
-local function createButton(name, positionY, color, callback)
-	local btn = Instance.new("TextButton", ScreenGui)
+-- GUI Setup
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "ExecutorUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = guiParent
+
+-- ฟังก์ชันสร้างปุ่ม
+local function createButton(name, posY, color, callback)
+	local btn = Instance.new("TextButton")
 	btn.Size = UDim2.new(0, 120, 0, 40)
-	btn.Position = UDim2.new(0, 20, 0, positionY)
+	btn.Position = UDim2.new(0, 20, 0, posY)
 	btn.Text = name
 	btn.BackgroundColor3 = color
 	btn.TextColor3 = Color3.new(1, 1, 1)
 	btn.Font = Enum.Font.SourceSansBold
 	btn.TextSize = 20
+	btn.Parent = ScreenGui
 	btn.MouseButton1Click:Connect(callback)
 	return btn
 end
 
--- ตัวแปรควบคุม StartLoop
+-- === LOOP 1 ===
 local isLooping = false
 local loopThread
 
--- ฟังก์ชันสำหรับ StartLoop
 local function startInvokeLoop()
 	loopThread = coroutine.create(function()
 		while isLooping do
@@ -38,45 +45,36 @@ local function startInvokeLoop()
 	coroutine.resume(loopThread)
 end
 
--- ปุ่ม StartLoop
-local btnStart = createButton("StartLoop", 20, Color3.fromRGB(60, 180, 75), function()
+local btnStart = createButton("StartLoop", 0.05, Color3.fromRGB(60, 180, 75), function()
 	isLooping = not isLooping
 	btnStart.Text = isLooping and "StopLoop" or "StartLoop"
 	btnStart.BackgroundColor3 = isLooping and Color3.fromRGB(200, 60, 60) or Color3.fromRGB(60, 180, 75)
-	if isLooping then
-		startInvokeLoop()
-	end
+	if isLooping then startInvokeLoop() end
 end)
 
--- ตัวแปรควบคุม LoopKill
+-- === LOOP 2 ===
 local isKilling = false
 local killThread
 
--- ฟังก์ชันค้นหาผู้เล่นใกล้ที่สุดในรัศมี
-local function getClosestPlayer(maxDistance)
-	local Players = game:GetService("Players")
-	local localPlayer = Players.LocalPlayer
-	local character = localPlayer.Character
-	if not character or not character:FindFirstChild("HumanoidRootPart") then return nil end
+local function getClosestPlayer(radius)
+	local lp = game.Players.LocalPlayer
+	local myChar = lp.Character
+	if not (myChar and myChar:FindFirstChild("HumanoidRootPart")) then return nil end
+	local myPos = myChar.HumanoidRootPart.Position
 
-	local myPos = character.HumanoidRootPart.Position
-	local closestPlayer, closestDist = nil, maxDistance
-
-	for _, player in pairs(Players:GetPlayers()) do
-		if player ~= localPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-			local pos = player.Character.HumanoidRootPart.Position
-			local dist = (pos - myPos).Magnitude
-			if dist < closestDist then
-				closestPlayer = player
-				closestDist = dist
+	local closest, minDist = nil, radius
+	for _, p in ipairs(game.Players:GetPlayers()) do
+		if p ~= lp and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+			local dist = (p.Character.HumanoidRootPart.Position - myPos).Magnitude
+			if dist < minDist then
+				minDist = dist
+				closest = p
 			end
 		end
 	end
-
-	return closestPlayer
+	return closest
 end
 
--- ฟังก์ชันสำหรับ Loop Kill
 local function startKillLoop()
 	killThread = coroutine.create(function()
 		while isKilling do
@@ -96,12 +94,9 @@ local function startKillLoop()
 	coroutine.resume(killThread)
 end
 
--- ปุ่ม Loop Kill
-local btnKill = createButton("Loop Kill", 70, Color3.fromRGB(80, 80, 220), function()
+local btnKill = createButton("Loop Kill", 0.15, Color3.fromRGB(80, 80, 220), function()
 	isKilling = not isKilling
 	btnKill.Text = isKilling and "Stop Kill" or "Loop Kill"
 	btnKill.BackgroundColor3 = isKilling and Color3.fromRGB(200, 60, 60) or Color3.fromRGB(80, 80, 220)
-	if isKilling then
-		startKillLoop()
-	end
+	if isKilling then startKillLoop() end
 end)

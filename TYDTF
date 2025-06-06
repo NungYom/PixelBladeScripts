@@ -1,7 +1,7 @@
--- รองรับ GUI ใน Executor
-local guiParent = gethui and gethui() or game:FindFirstChild("CoreGui") or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+-- Parent GUI ให้เหมาะกับ executor
+local guiParent = gethui and gethui() or game:FindFirstChild("CoreGui") or game.Players.LocalPlayer:WaitForChild("PlayerGui")
 
--- GUI Setup
+-- สร้าง GUI
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "ExecutorUI"
 ScreenGui.ResetOnSpawn = false
@@ -22,7 +22,7 @@ local function createButton(name, posY, color, callback)
 	return btn
 end
 
--- === LOOP 1 ===
+-- ========== ฟีเจอร์ 1: StartLoop ==========
 local isLooping = false
 local loopThread
 
@@ -49,45 +49,51 @@ local btnStart = createButton("StartLoop", 0.05, Color3.fromRGB(60, 180, 75), fu
 	isLooping = not isLooping
 	btnStart.Text = isLooping and "StopLoop" or "StartLoop"
 	btnStart.BackgroundColor3 = isLooping and Color3.fromRGB(200, 60, 60) or Color3.fromRGB(60, 180, 75)
-	if isLooping then startInvokeLoop() end
+	if isLooping then
+		startInvokeLoop()
+	end
 end)
 
--- === LOOP 2 ===
+-- ========== ฟีเจอร์ 2: Loop Kill ==========
 local isKilling = false
 local killThread
 
 local function getClosestPlayer(radius)
-	local lp = game.Players.LocalPlayer
+	local Players = game:GetService("Players")
+	local lp = Players.LocalPlayer
 	local myChar = lp.Character
 	if not (myChar and myChar:FindFirstChild("HumanoidRootPart")) then return nil end
-	local myPos = myChar.HumanoidRootPart.Position
 
-	local closest, minDist = nil, radius
-	for _, p in ipairs(game.Players:GetPlayers()) do
+	local myPos = myChar.HumanoidRootPart.Position
+	local closestPlayer = nil
+	local closestDist = radius
+
+	for _, p in ipairs(Players:GetPlayers()) do
 		if p ~= lp and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
 			local dist = (p.Character.HumanoidRootPart.Position - myPos).Magnitude
-			if dist < minDist then
-				minDist = dist
-				closest = p
+			if dist < closestDist then
+				closestDist = dist
+				closestPlayer = p
 			end
 		end
 	end
-	return closest
+
+	return closestPlayer
 end
 
 local function startKillLoop()
 	killThread = coroutine.create(function()
 		while isKilling do
-			local target = getClosestPlayer(100)
-			if target then
-				local args = {
-					"\231\142\169\229\174\182\233\128\137\230\139\169\231\155\174\230\160\135",
-					{ target }
-				}
-				pcall(function()
+			pcall(function()
+				local target = getClosestPlayer(100)
+				if target then
+					local args = {
+						"\231\142\169\229\174\182\233\128\137\230\139\169\231\155\174\230\160\135",
+						{ target }
+					}
 					game:GetService("ReplicatedStorage"):WaitForChild("Msg"):WaitForChild("RemoteEvent"):FireServer(unpack(args))
-				end)
-			end
+				end
+			end)
 			wait(0.5)
 		end
 	end)
@@ -98,5 +104,7 @@ local btnKill = createButton("Loop Kill", 0.15, Color3.fromRGB(80, 80, 220), fun
 	isKilling = not isKilling
 	btnKill.Text = isKilling and "Stop Kill" or "Loop Kill"
 	btnKill.BackgroundColor3 = isKilling and Color3.fromRGB(200, 60, 60) or Color3.fromRGB(80, 80, 220)
-	if isKilling then startKillLoop() end
+	if isKilling then
+		startKillLoop()
+	end
 end)

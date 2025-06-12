@@ -11,7 +11,7 @@ local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 -- Settings
 local moveSpeed = 100
 local orbitRadius = 5
-local autoMoveEnabled = false
+local autoMoveEnabled = true
 local touchedParts = {}
 local visitedTargets = {}
 local lastTarget = nil

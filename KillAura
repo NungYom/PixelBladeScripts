@@ -1,173 +1,147 @@
--- GUI AutoFarm + AutoSellAll + DigHere + Adjustable Timers
+-- 📦 Services
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 
+-- 👤 Player References
+local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local Humanoid = Character:WaitForChild("Humanoid")
 local HRP = Character:WaitForChild("HumanoidRootPart")
 
--- GUI Setup
-local gui = Instance.new("ScreenGui", game:GetService("CoreGui"))
-gui.Name = "AutoFarmGUIv4"
-
-local function createButton(text, position)
-	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(0, 200, 0, 50)
-	btn.Position = position
-	btn.Text = text
-	btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-	btn.TextColor3 = Color3.new(1, 1, 1)
-	btn.TextScaled = true
-	btn.Font = Enum.Font.SourceSansBold
-	btn.Parent = gui
-	return btn
-end
-
-local function createSlider(name, position, defaultValue, onChange)
-	local frame = Instance.new("Frame", gui)
-	frame.Size = UDim2.new(0, 200, 0, 70)
-	frame.Position = position
-	frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-
-	local label = Instance.new("TextLabel", frame)
-	label.Size = UDim2.new(1, 0, 0, 20)
-	label.Position = UDim2.new(0, 0, 0, 0)
-	label.Text = name .. ": " .. tostring(defaultValue)
-	label.TextColor3 = Color3.new(1, 1, 1)
-	label.BackgroundTransparency = 1
-	label.Font = Enum.Font.SourceSansBold
-	label.TextScaled = true
-
-	local slider = Instance.new("TextButton", frame)
-	slider.Size = UDim2.new(1, 0, 0, 40)
-	slider.Position = UDim2.new(0, 0, 0, 25)
-	slider.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-	slider.Text = ""
-	slider.AutoButtonColor = false
-
-	local value = Instance.new("NumberValue")
-	value.Value = defaultValue
-
-	slider.MouseButton1Down:Connect(function()
-		local conn
-		conn = RunService.RenderStepped:Connect(function()
-			local mouseX = game:GetService("UserInputService"):GetMouseLocation().X
-			local sliderX = slider.AbsolutePosition.X
-			local sliderW = slider.AbsoluteSize.X
-			local pct = math.clamp((mouseX - sliderX) / sliderW, 0, 1)
-			local newVal = math.floor(pct * 49) + 1
-			value.Value = newVal
-			label.Text = name .. ": " .. tostring(newVal)
-			if onChange then onChange(newVal) end
-		end)
-		game:GetService("UserInputService").InputEnded:Wait()
-		conn:Disconnect()
-	end)
-
-	return value
-end
-
--- States
+-- 🧠 State
 local autoSell = false
 local autoFarm4 = false
 local farmDestination = nil
 local collectDuration = 3
 local shakeDuration = 20
 
--- Sell Button
-local sellBtn = createButton("Auto Sell All: OFF", UDim2.new(0, 10, 0, 10))
-sellBtn.MouseButton1Click:Connect(function()
-	autoSell = not autoSell
-	sellBtn.Text = "Auto Sell All: " .. (autoSell and "ON" or "OFF")
-end)
+-- 📦 GUI Creation
+local ScreenGui = Instance.new("ScreenGui", game:GetService("CoreGui"))
+ScreenGui.Name = "AutoFarmUI"
 
--- Auto Farm4 Button
-local farmBtn = createButton("Auto Farm4: OFF", UDim2.new(0, 10, 0, 70))
-farmBtn.MouseButton1Click:Connect(function()
-	autoFarm4 = not autoFarm4
-	farmBtn.Text = "Auto Farm4: " .. (autoFarm4 and "ON" or "OFF")
-end)
-
--- Dig Here Button
-local digBtn = createButton("Dig Here", UDim2.new(0, 10, 0, 130))
-digBtn.MouseButton1Click:Connect(function()
-	farmDestination = HRP.Position
-	Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-	print("📌 จุดปลายทางถูกตั้งค่าใหม่:", farmDestination)
-end)
-
--- Slider: Sand (Collect Duration)
-createSlider("Sand", UDim2.new(0, 10, 0, 200), collectDuration, function(newVal)
-	collectDuration = newVal
-end)
-
--- Slider: Water (Shake Duration)
-createSlider("Water", UDim2.new(0, 10, 0, 280), shakeDuration, function(newVal)
-	shakeDuration = newVal
-end)
-
--- Helper: หา Pan ที่ผู้เล่นถืออยู่ (เช่น Metal/Diamond/Godly Pan)
-local function getEquippedPan()
-	for _, tool in pairs(Character:GetChildren()) do
-		if tool:IsA("Tool") and string.find(tool.Name, "Pan") then
-			return tool
-		end
-	end
-	return nil
+-- 📦 Function to Create Button
+local function createButton(name, pos, callback)
+	local button = Instance.new("TextButton")
+	button.Size = UDim2.new(0, 120, 0, 30)
+	button.Position = pos
+	button.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
+	button.TextColor3 = Color3.new(1, 1, 1)
+	button.Text = name
+	button.Parent = ScreenGui
+	button.MouseButton1Click:Connect(callback)
+	return button
 end
 
--- Auto Sell Loop
-task.spawn(function()
+-- 📦 Function to Create Slider
+local function createSlider(name, pos, defaultValue, callback)
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(0, 120, 0, 20)
+	label.Position = pos
+	label.BackgroundTransparency = 1
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.Text = name .. ": " .. tostring(defaultValue)
+	label.Parent = ScreenGui
+
+	local slider = Instance.new("TextButton")
+	slider.Size = UDim2.new(0, 120, 0, 20)
+	slider.Position = pos + UDim2.new(0, 0, 0, 20)
+	slider.BackgroundColor3 = Color3.new(0.3, 0.3, 0.3)
+	slider.TextColor3 = Color3.new(1, 1, 1)
+	slider.Text = tostring(defaultValue)
+	slider.Parent = ScreenGui
+
+	slider.MouseButton1Click:Connect(function()
+		local new = tonumber(string.match(slider.Text, "%d+")) or defaultValue
+		new = (new % 50) + 1
+		slider.Text = tostring(new)
+		label.Text = name .. ": " .. tostring(new)
+		callback(new)
+	end)
+end
+
+-- 🔘 Auto Sell Button
+createButton("Auto Sell All", UDim2.new(0, 10, 0, 10), function()
+	autoSell = not autoSell
+end)
+
+-- 🔘 Auto Farm4 Button
+createButton("Auto Farm4", UDim2.new(0, 10, 0, 50), function()
+	autoFarm4 = not autoFarm4
+end)
+
+-- 🔘 Dig Here Button
+createButton("Dig Here", UDim2.new(0, 10, 0, 90), function()
+	farmDestination = HRP.Position
+	Character:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.Jumping)
+end)
+
+-- 🔘 Sliders
+createSlider("Sand", UDim2.new(0, 10, 0, 130), collectDuration, function(value)
+	collectDuration = value
+end)
+
+createSlider("Water", UDim2.new(0, 10, 0, 180), shakeDuration, function(value)
+	shakeDuration = value
+end)
+
+-- 🔁 Auto Sell Loop
+spawn(function()
 	while true do
 		if autoSell then
 			pcall(function()
 				ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Shop"):WaitForChild("SellAll"):InvokeServer()
 			end)
 		end
-		task.wait(10)
+		wait(10)
 	end
 end)
 
--- Auto Farm4 Loop
-task.spawn(function()
+-- 🧠 Get Equipped Pan Name
+local function getEquippedPanName()
+	for _, tool in pairs(Character:GetChildren()) do
+		if tool:IsA("Tool") and string.find(tool.Name, "Pan") then
+			return tool.Name
+		end
+	end
+	return nil
+end
+
+-- 🔁 Auto Farm4 Loop
+spawn(function()
 	while true do
 		if autoFarm4 and farmDestination then
 			pcall(function()
 				local originalPos = HRP.Position
-
-				-- วาร์ปไปยัง farmDestination
 				HRP.CFrame = CFrame.new(farmDestination)
 
-				-- รัว Collect ตามเวลาที่กำหนด
+				-- Collect
 				local startTime = tick()
 				while tick() - startTime < collectDuration do
-					local pan = getEquippedPan()
+					local panName = getEquippedPanName()
+					local pan = Character:FindFirstChild(panName or "")
 					if pan and pan:FindFirstChild("Scripts") and pan.Scripts:FindFirstChild("Collect") then
-						local args = {1}
-						pan.Scripts.Collect:InvokeServer(unpack(args))
+						pan.Scripts.Collect:InvokeServer(1)
 					end
-					task.wait(0.05)
+					wait(0.05)
 				end
 
-				-- วาร์ปกลับ
+				-- Return
 				HRP.CFrame = CFrame.new(originalPos)
-				task.wait(0.2)
+				wait(0.2)
 
-				-- รัว Shake ตามเวลาที่กำหนด
+				-- Shake
 				local shakeStart = tick()
 				while tick() - shakeStart < shakeDuration do
-					local pan = getEquippedPan()
+					local panName = getEquippedPanName()
+					local pan = Character:FindFirstChild(panName or "")
 					if pan and pan:FindFirstChild("Scripts") and pan.Scripts:FindFirstChild("Shake") then
-						pcall(function()
-							pan.Scripts.Shake:FireServer()
-						end)
+						pan.Scripts.Shake:FireServer()
 					end
-					task.wait(0.05)
+					wait(0.05)
 				end
 			end)
 		end
-		task.wait(1)
+		wait(1)
 	end
 end)

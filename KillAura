@@ -75,7 +75,7 @@ task.spawn(function()
 				noclip = true
 
 				-- วาร์ปไปตำแหน่ง
-				HRP.CFrame = CFrame.new(-363, 15, -558)
+				HRP.CFrame = CFrame.new(-35, 12, -50)
 
 				-- ตรึง 3 วินาที พร้อม spam Collect
 				local startTime = tick()

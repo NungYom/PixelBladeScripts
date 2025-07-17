@@ -1,16 +1,16 @@
--- GUI AutoFarm + AutoSellAll + DigHere
+-- GUI AutoFarm + AutoSellAll + DigHere + Adjustable Timers
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 
-local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local Humanoid = Character:WaitForChild("Humanoid")
 local HRP = Character:WaitForChild("HumanoidRootPart")
 
 -- GUI Setup
 local gui = Instance.new("ScreenGui", game:GetService("CoreGui"))
-gui.Name = "AutoFarmGUIv2"
+gui.Name = "AutoFarmGUIv4"
 
 local function createButton(text, position)
 	local btn = Instance.new("TextButton")
@@ -25,10 +25,56 @@ local function createButton(text, position)
 	return btn
 end
 
+local function createSlider(name, position, defaultValue, onChange)
+	local frame = Instance.new("Frame", gui)
+	frame.Size = UDim2.new(0, 200, 0, 70)
+	frame.Position = position
+	frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+
+	local label = Instance.new("TextLabel", frame)
+	label.Size = UDim2.new(1, 0, 0, 20)
+	label.Position = UDim2.new(0, 0, 0, 0)
+	label.Text = name .. ": " .. tostring(defaultValue)
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.SourceSansBold
+	label.TextScaled = true
+
+	local slider = Instance.new("TextButton", frame)
+	slider.Size = UDim2.new(1, 0, 0, 40)
+	slider.Position = UDim2.new(0, 0, 0, 25)
+	slider.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+	slider.Text = ""
+	slider.AutoButtonColor = false
+
+	local value = Instance.new("NumberValue")
+	value.Value = defaultValue
+
+	slider.MouseButton1Down:Connect(function()
+		local conn
+		conn = RunService.RenderStepped:Connect(function()
+			local mouseX = game:GetService("UserInputService"):GetMouseLocation().X
+			local sliderX = slider.AbsolutePosition.X
+			local sliderW = slider.AbsoluteSize.X
+			local pct = math.clamp((mouseX - sliderX) / sliderW, 0, 1)
+			local newVal = math.floor(pct * 49) + 1
+			value.Value = newVal
+			label.Text = name .. ": " .. tostring(newVal)
+			if onChange then onChange(newVal) end
+		end)
+		game:GetService("UserInputService").InputEnded:Wait()
+		conn:Disconnect()
+	end)
+
+	return value
+end
+
 -- States
 local autoSell = false
 local autoFarm4 = false
 local farmDestination = nil
+local collectDuration = 3
+local shakeDuration = 20
 
 -- Sell Button
 local sellBtn = createButton("Auto Sell All: OFF", UDim2.new(0, 10, 0, 10))
@@ -52,6 +98,26 @@ digBtn.MouseButton1Click:Connect(function()
 	print("📌 จุดปลายทางถูกตั้งค่าใหม่:", farmDestination)
 end)
 
+-- Slider: Sand (Collect Duration)
+createSlider("Sand", UDim2.new(0, 10, 0, 200), collectDuration, function(newVal)
+	collectDuration = newVal
+end)
+
+-- Slider: Water (Shake Duration)
+createSlider("Water", UDim2.new(0, 10, 0, 280), shakeDuration, function(newVal)
+	shakeDuration = newVal
+end)
+
+-- Helper: หา Pan ที่ผู้เล่นถืออยู่ (เช่น Metal/Diamond/Godly Pan)
+local function getEquippedPan()
+	for _, tool in pairs(Character:GetChildren()) do
+		if tool:IsA("Tool") and string.find(tool.Name, "Pan") then
+			return tool
+		end
+	end
+	return nil
+end
+
 -- Auto Sell Loop
 task.spawn(function()
 	while true do
@@ -74,21 +140,30 @@ task.spawn(function()
 				-- วาร์ปไปยัง farmDestination
 				HRP.CFrame = CFrame.new(farmDestination)
 
-				-- รัว Collect 3 วินาที
+				-- รัว Collect ตามเวลาที่กำหนด
 				local startTime = tick()
-				while tick() - startTime < 3 do
-					local args = {1}
-					Character:WaitForChild("Metal Pan"):WaitForChild("Scripts"):WaitForChild("Collect"):InvokeServer(unpack(args))
+				while tick() - startTime < collectDuration do
+					local pan = getEquippedPan()
+					if pan and pan:FindFirstChild("Scripts") and pan.Scripts:FindFirstChild("Collect") then
+						local args = {1}
+						pan.Scripts.Collect:InvokeServer(unpack(args))
+					end
 					task.wait(0.05)
 				end
 
 				-- วาร์ปกลับ
 				HRP.CFrame = CFrame.new(originalPos)
+				task.wait(0.2)
 
-				-- รัว Shake 20 วินาที
+				-- รัว Shake ตามเวลาที่กำหนด
 				local shakeStart = tick()
-				while tick() - shakeStart < 20 do
-					Character:WaitForChild("Metal Pan"):WaitForChild("Scripts"):WaitForChild("Shake"):FireServer()
+				while tick() - shakeStart < shakeDuration do
+					local pan = getEquippedPan()
+					if pan and pan:FindFirstChild("Scripts") and pan.Scripts:FindFirstChild("Shake") then
+						pcall(function()
+							pan.Scripts.Shake:FireServer()
+						end)
+					end
 					task.wait(0.05)
 				end
 			end)

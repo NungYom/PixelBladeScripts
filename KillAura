@@ -43,20 +43,45 @@ local function createSlider(name, pos, defaultValue, callback)
 	label.Text = name .. ": " .. tostring(defaultValue)
 	label.Parent = ScreenGui
 
-	local slider = Instance.new("TextButton")
-	slider.Size = UDim2.new(0, 120, 0, 20)
-	slider.Position = pos + UDim2.new(0, 0, 0, 20)
-	slider.BackgroundColor3 = Color3.new(0.3, 0.3, 0.3)
-	slider.TextColor3 = Color3.new(1, 1, 1)
-	slider.Text = tostring(defaultValue)
-	slider.Parent = ScreenGui
+	local sliderFrame = Instance.new("Frame")
+	sliderFrame.Size = UDim2.new(0, 120, 0, 10)
+	sliderFrame.Position = pos + UDim2.new(0, 0, 0, 20)
+	sliderFrame.BackgroundColor3 = Color3.new(0.3, 0.3, 0.3)
+	sliderFrame.BorderSizePixel = 0
+	sliderFrame.Parent = ScreenGui
 
-	slider.MouseButton1Click:Connect(function()
-		local new = tonumber(string.match(slider.Text, "%d+")) or defaultValue
-		new = (new % 50) + 1
-		slider.Text = tostring(new)
-		label.Text = name .. ": " .. tostring(new)
-		callback(new)
+	local knob = Instance.new("Frame")
+	knob.Size = UDim2.new(0, 10, 0, 10)
+	knob.Position = UDim2.new((defaultValue - 1) / 49, 0, 0, 0)
+	knob.BackgroundColor3 = Color3.new(1, 1, 1)
+	knob.BorderSizePixel = 0
+	knob.Name = "Knob"
+	knob.Parent = sliderFrame
+
+	local dragging = false
+
+	knob.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+		end
+	end)
+
+	sliderFrame.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = false
+		end
+	end)
+
+	RunService.RenderStepped:Connect(function()
+		if dragging then
+			local mouseX = game:GetService("UserInputService"):GetMouseLocation().X
+			local frameX = sliderFrame.AbsolutePosition.X
+			local percent = math.clamp((mouseX - frameX) / 120, 0, 1)
+			local value = math.floor(percent * 49) + 1
+			knob.Position = UDim2.new((value - 1) / 49, 0, 0, 0)
+			label.Text = name .. ": " .. tostring(value)
+			callback(value)
+		end
 	end)
 end
 

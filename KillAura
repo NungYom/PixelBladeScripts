@@ -22,151 +22,158 @@ ScreenGui.Name = "AutoFarmUI"
 
 -- 📦 Function to Create Button
 local function createButton(name, pos, callback)
-	local button = Instance.new("TextButton")
-	button.Size = UDim2.new(0, 120, 0, 30)
-	button.Position = pos
-	button.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
-	button.TextColor3 = Color3.new(1, 1, 1)
-	button.Text = name
-	button.Parent = ScreenGui
-	button.MouseButton1Click:Connect(callback)
-	return button
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(0, 120, 0, 30)
+    button.Position = pos
+    button.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
+    button.TextColor3 = Color3.new(1, 1, 1)
+    button.Text = name
+    button.Parent = ScreenGui
+    button.MouseButton1Click:Connect(callback)
+    return button
 end
 
 -- 📦 Function to Create Slider
 local function createSlider(name, pos, defaultValue, callback)
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.new(0, 120, 0, 20)
-	label.Position = pos
-	label.BackgroundTransparency = 1
-	label.TextColor3 = Color3.new(1, 1, 1)
-	label.Text = name .. ": " .. tostring(defaultValue)
-	label.Parent = ScreenGui
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0, 120, 0, 20)
+    label.Position = pos
+    label.BackgroundTransparency = 1
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.Text = name .. ": " .. tostring(defaultValue)
+    label.Parent = ScreenGui
 
-	local sliderFrame = Instance.new("Frame")
-	sliderFrame.Size = UDim2.new(0, 120, 0, 10)
-	sliderFrame.Position = pos + UDim2.new(0, 0, 0, 20)
-	sliderFrame.BackgroundColor3 = Color3.new(0.3, 0.3, 0.3)
-	sliderFrame.BorderSizePixel = 0
-	sliderFrame.Parent = ScreenGui
+    local sliderFrame = Instance.new("Frame")
+    sliderFrame.Size = UDim2.new(0, 120, 0, 10)
+    sliderFrame.Position = pos + UDim2.new(0, 0, 0, 20)
+    sliderFrame.BackgroundColor3 = Color3.new(0.3, 0.3, 0.3)
+    sliderFrame.BorderSizePixel = 0
+    sliderFrame.Parent = ScreenGui
 
-	local knob = Instance.new("Frame")
-	knob.Size = UDim2.new(0, 10, 0, 10)
-	knob.Position = UDim2.new((defaultValue - 1) / 49, 0, 0, 0)
-	knob.BackgroundColor3 = Color3.new(1, 1, 1)
-	knob.BorderSizePixel = 0
-	knob.Name = "Knob"
-	knob.Parent = sliderFrame
+    local knob = Instance.new("Frame")
+    knob.Size = UDim2.new(0, 10, 0, 10)
+    knob.Position = UDim2.new((defaultValue - 1) / 49, 0, 0, 0)
+    knob.BackgroundColor3 = Color3.new(1, 1, 1)
+    knob.BorderSizePixel = 0
+    knob.Name = "Knob"
+    knob.Parent = sliderFrame
 
-	local dragging = false
+    local dragging = false
 
-	knob.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			dragging = true
-		end
-	end)
+    knob.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+        end
+    end)
 
-	sliderFrame.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			dragging = false
-		end
-	end)
+    sliderFrame.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
 
-	RunService.RenderStepped:Connect(function()
-		if dragging then
-			local mouseX = game:GetService("UserInputService"):GetMouseLocation().X
-			local frameX = sliderFrame.AbsolutePosition.X
-			local percent = math.clamp((mouseX - frameX) / 120, 0, 1)
-			local value = math.floor(percent * 49) + 1
-			knob.Position = UDim2.new((value - 1) / 49, 0, 0, 0)
-			label.Text = name .. ": " .. tostring(value)
-			callback(value)
-		end
-	end)
+    RunService.RenderStepped:Connect(function()
+        if dragging then
+            local mouseX = game:GetService("UserInputService"):GetMouseLocation().X
+            local frameX = sliderFrame.AbsolutePosition.X
+            local percent = math.clamp((mouseX - frameX) / 120, 0, 1)
+            local value = math.floor(percent * 49) + 1
+            knob.Position = UDim2.new((value - 1) / 49, 0, 0, 0)
+            label.Text = name .. ": " .. tostring(value)
+            callback(value)
+        end
+    end)
 end
 
 -- 🔘 Auto Sell Button
 createButton("Auto Sell All", UDim2.new(0, 10, 0, 10), function()
-	autoSell = not autoSell
+    autoSell = not autoSell
 end)
 
 -- 🔘 Auto Farm4 Button
 createButton("Auto Farm4", UDim2.new(0, 10, 0, 50), function()
-	autoFarm4 = not autoFarm4
+    autoFarm4 = not autoFarm4
 end)
 
 -- 🔘 Dig Here Button
 createButton("Dig Here", UDim2.new(0, 10, 0, 90), function()
-	farmDestination = HRP.Position
-	Character:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.Jumping)
+    farmDestination = HRP.Position
+    Character:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.Jumping)
 end)
 
 -- 🔘 Sliders
 createSlider("Sand", UDim2.new(0, 10, 0, 130), collectDuration, function(value)
-	collectDuration = value
+    collectDuration = value
 end)
 
 createSlider("Water", UDim2.new(0, 10, 0, 180), shakeDuration, function(value)
-	shakeDuration = value
+    shakeDuration = value
 end)
 
 -- 🔁 Auto Sell Loop
 spawn(function()
-	while true do
-		if autoSell then
-			pcall(function()
-				ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Shop"):WaitForChild("SellAll"):InvokeServer()
-			end)
-		end
-		wait(10)
-	end
+    while true do
+        if autoSell then
+            pcall(function()
+                ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Shop"):WaitForChild("SellAll"):InvokeServer()
+            end)
+        end
+        wait(10)
+    end
 end)
 
 -- 🧠 Get Equipped Pan Name
 local function getEquippedPanName()
-	for _, tool in pairs(Character:GetChildren()) do
-		if tool:IsA("Tool") and string.find(tool.Name, "Pan") then
-			return tool.Name
-		end
-	end
-	return nil
+    for _, tool in pairs(Character:GetChildren()) do
+        if tool:IsA("Tool") and string.find(tool.Name, "Pan") then
+            return tool.Name
+        end
+    end
+    return nil
 end
 
 -- 🔁 Auto Farm4 Loop
 spawn(function()
-	while true do
-		if autoFarm4 and farmDestination then
-			pcall(function()
-				local originalPos = HRP.Position
-				HRP.CFrame = CFrame.new(farmDestination)
+    while true do
+        if autoFarm4 and farmDestination then
+            pcall(function()
+                local originalPos = HRP.Position
+                HRP.CFrame = CFrame.new(farmDestination)
 
-				-- Collect
-				local startTime = tick()
-				while tick() - startTime < collectDuration do
-					local panName = getEquippedPanName()
-					local pan = Character:FindFirstChild(panName or "")
-					if pan and pan:FindFirstChild("Scripts") and pan.Scripts:FindFirstChild("Collect") then
-						pan.Scripts.Collect:InvokeServer(1)
-					end
-					wait(0.05)
-				end
+                -- Collect
+                local startTime = tick()
+                while tick() - startTime < collectDuration do
+                    local panName = getEquippedPanName()
+                    local pan = Character:FindFirstChild(panName or "")
+                    if pan and pan:FindFirstChild("Scripts") and pan.Scripts:FindFirstChild("Collect") then
+                        pan.Scripts.Collect:InvokeServer(1)
+                    end
+                    wait(0.05)
+                end
 
-				-- Return
-				HRP.CFrame = CFrame.new(originalPos)
-				wait(0.2)
+                -- Return
+                HRP.CFrame = CFrame.new(originalPos)
+                wait(0.2)
 
-				-- Shake
-				local shakeStart = tick()
-				while tick() - shakeStart < shakeDuration do
-					local panName = getEquippedPanName()
-					local pan = Character:FindFirstChild(panName or "")
-					if pan and pan:FindFirstChild("Scripts") and pan.Scripts:FindFirstChild("Shake") then
-						pan.Scripts.Shake:FireServer()
-					end
-					wait(0.05)
-				end
-			end)
-		end
-		wait(1)
-	end
+                -- Fire Pan.InvokeServer before Shake using current pan
+                local panName = getEquippedPanName()
+                local pan = Character:FindFirstChild(panName or "")
+                if pan and pan:FindFirstChild("Scripts") and pan.Scripts:FindFirstChild("Pan") then
+                    pan.Scripts.Pan:InvokeServer()
+                end
+
+                -- Shake
+                local shakeStart = tick()
+                while tick() - shakeStart < shakeDuration do
+                    panName = getEquippedPanName()
+                    pan = Character:FindFirstChild(panName or "")
+                    if pan and pan:FindFirstChild("Scripts") and pan.Scripts:FindFirstChild("Shake") then
+                        pan.Scripts.Shake:FireServer()
+                    end
+                    wait(0.05)
+                end
+            end)
+        end
+        wait(1)
+    end
 end)

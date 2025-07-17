@@ -1,34 +1,36 @@
--- GUI AutoFarm + AutoSellAll สำหรับ Delta Executor
+-- GUI AutoFarm + AutoSellAll + DigHere
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
 
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
 local HRP = Character:WaitForChild("HumanoidRootPart")
 
--- GUI
-local ScreenGui = Instance.new("ScreenGui", game:GetService("CoreGui"))
-ScreenGui.Name = "AutoFarmGUI"
+-- GUI Setup
+local gui = Instance.new("ScreenGui", game:GetService("CoreGui"))
+gui.Name = "AutoFarmGUIv2"
 
 local function createButton(text, position)
 	local btn = Instance.new("TextButton")
 	btn.Size = UDim2.new(0, 200, 0, 50)
 	btn.Position = position
 	btn.Text = text
-	btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 	btn.TextColor3 = Color3.new(1, 1, 1)
 	btn.TextScaled = true
-	btn.Parent = ScreenGui
+	btn.Font = Enum.Font.SourceSansBold
+	btn.Parent = gui
 	return btn
 end
 
--- Toggle Variables
+-- States
 local autoSell = false
 local autoFarm4 = false
+local farmDestination = nil
 
--- Auto Sell Button
+-- Sell Button
 local sellBtn = createButton("Auto Sell All: OFF", UDim2.new(0, 10, 0, 10))
 sellBtn.MouseButton1Click:Connect(function()
 	autoSell = not autoSell
@@ -42,16 +44,12 @@ farmBtn.MouseButton1Click:Connect(function()
 	farmBtn.Text = "Auto Farm4: " .. (autoFarm4 and "ON" or "OFF")
 end)
 
--- Noclip System
-local noclip = false
-RunService.Stepped:Connect(function()
-	if noclip and Character and HRP then
-		for _, part in pairs(Character:GetDescendants()) do
-			if part:IsA("BasePart") then
-				part.CanCollide = false
-			end
-		end
-	end
+-- Dig Here Button
+local digBtn = createButton("Dig Here", UDim2.new(0, 10, 0, 130))
+digBtn.MouseButton1Click:Connect(function()
+	farmDestination = HRP.Position
+	Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+	print("📌 จุดปลายทางถูกตั้งค่าใหม่:", farmDestination)
 end)
 
 -- Auto Sell Loop
@@ -69,15 +67,14 @@ end)
 -- Auto Farm4 Loop
 task.spawn(function()
 	while true do
-		if autoFarm4 then
+		if autoFarm4 and farmDestination then
 			pcall(function()
 				local originalPos = HRP.Position
-				noclip = true
 
-				-- วาร์ปไปตำแหน่ง
-				HRP.CFrame = CFrame.new(-35, 12, -50)
+				-- วาร์ปไปยัง farmDestination
+				HRP.CFrame = CFrame.new(farmDestination)
 
-				-- ตรึง 3 วินาที พร้อม spam Collect
+				-- รัว Collect 3 วินาที
 				local startTime = tick()
 				while tick() - startTime < 3 do
 					local args = {1}
@@ -85,11 +82,10 @@ task.spawn(function()
 					task.wait(0.05)
 				end
 
-				-- วาร์ปกลับจุดเดิม
+				-- วาร์ปกลับ
 				HRP.CFrame = CFrame.new(originalPos)
-				noclip = false
 
-				-- รัน Shake 20 วิ
+				-- รัว Shake 20 วินาที
 				local shakeStart = tick()
 				while tick() - shakeStart < 20 do
 					Character:WaitForChild("Metal Pan"):WaitForChild("Scripts"):WaitForChild("Shake"):FireServer()

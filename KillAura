@@ -26,6 +26,7 @@ local function createButton(name, pos, callback)
     button.Size = UDim2.new(0, 120, 0, 30)
     button.Position = pos
     button.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
+    button.BackgroundTransparency = 0.5
     button.TextColor3 = Color3.new(1, 1, 1)
     button.Text = name
     button.Parent = ScreenGui
@@ -38,7 +39,7 @@ local function createSlider(name, pos, defaultValue, callback)
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(0, 120, 0, 20)
     label.Position = pos
-    label.BackgroundTransparency = 1
+    label.BackgroundTransparency = 0.5
     label.TextColor3 = Color3.new(1, 1, 1)
     label.Text = name .. ": " .. tostring(defaultValue)
     label.Parent = ScreenGui
@@ -47,6 +48,7 @@ local function createSlider(name, pos, defaultValue, callback)
     sliderFrame.Size = UDim2.new(0, 120, 0, 10)
     sliderFrame.Position = pos + UDim2.new(0, 0, 0, 20)
     sliderFrame.BackgroundColor3 = Color3.new(0.3, 0.3, 0.3)
+    sliderFrame.BackgroundTransparency = 0.5
     sliderFrame.BorderSizePixel = 0
     sliderFrame.Parent = ScreenGui
 
@@ -54,6 +56,7 @@ local function createSlider(name, pos, defaultValue, callback)
     knob.Size = UDim2.new(0, 10, 0, 10)
     knob.Position = UDim2.new((defaultValue - 1) / 49, 0, 0, 0)
     knob.BackgroundColor3 = Color3.new(1, 1, 1)
+    knob.BackgroundTransparency = 0.5
     knob.BorderSizePixel = 0
     knob.Name = "Knob"
     knob.Parent = sliderFrame

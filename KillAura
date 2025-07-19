@@ -1,115 +1,174 @@
--- UI SETUP
+-- Services
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local LocalPlayer = Players.LocalPlayer
-local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local HRP = Character:WaitForChild("HumanoidRootPart")
+local TweenService = game:GetService("TweenService")
 
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "AutoFarmUI"
-ScreenGui.Parent = game:GetService("CoreGui")
-
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 200, 0, 180)
-mainFrame.Position = UDim2.new(0, 20, 0, 200)
-mainFrame.BackgroundTransparency = 0.3
-mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-mainFrame.Parent = ScreenGui
-
-local function createButton(text, order, callback)
-	local button = Instance.new("TextButton")
-	button.Size = UDim2.new(1, -20, 0, 30)
-	button.Position = UDim2.new(0, 10, 0, 10 + (order - 1) * 40)
-	button.Text = text
-	button.TextColor3 = Color3.new(1, 1, 1)
-	button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-	button.Font = Enum.Font.SourceSansBold
-	button.TextSize = 18
-	button.MouseButton1Click:Connect(callback)
-	button.Parent = mainFrame
+-- GUI Creation Helper
+local function createButton(name, position)
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(0, 120, 0, 30)
+    button.Position = position
+    button.Text = name
+    button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    button.TextColor3 = Color3.new(1, 1, 1)
+    button.Parent = game.CoreGui
+    return button
 end
 
--- VARIABLES
-local autoFarm4 = false
-local startPosition = nil
-local farmDestination = nil
-local collectDuration = 7
-local shakeDuration = 10
+local function createSlider(name, position, min, max, default)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 200, 0, 50)
+    frame.Position = position
+    frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    frame.Parent = game.CoreGui
 
--- UTILS
-local function getEquippedPan()
-	return Character:FindFirstChild("Worldshaker")
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0.4, 0)
+    label.Position = UDim2.new(0, 0, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = name .. ": " .. default
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.Parent = frame
+
+    local slider = Instance.new("TextButton")
+    slider.Size = UDim2.new(1, 0, 0.6, 0)
+    slider.Position = UDim2.new(0, 0, 0.4, 0)
+    slider.Text = ""
+    slider.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+    slider.Parent = frame
+
+    local value = default
+    slider.MouseButton1Click:Connect(function()
+        value = value + 1
+        if value > max then value = min end
+        label.Text = name .. ": " .. value
+    end)
+
+    return function()
+        return value
+    end
 end
 
--- REMOTE FUNCTIONS
-local function fastCollect(duration)
-	local pan = getEquippedPan()
-	if not (pan and pan.Scripts and pan.Scripts:FindFirstChild("Collect")) then return end
-	local collectFunc = pan.Scripts.Collect
-	local startTime = tick()
+-- GUI Controls
+local digHereBtn = createButton("Dig Here", UDim2.new(0, 10, 0, 10))
+local startBtn = createButton("Start", UDim2.new(0, 10, 0, 50))
+local sellBtn = createButton("Sell", UDim2.new(0, 10, 0, 90))
 
-	spawn(function()
-		while tick() - startTime < duration do
-			pcall(function() collectFunc:InvokeServer() end)
-			pcall(function() collectFunc:InvokeServer(1) end)
-			task.wait(0)
-		end
-	end)
-end
+local getSand = createSlider("Sand", UDim2.new(0, 150, 0, 10), 1, 20, 7)
+local getWater = createSlider("Water", UDim2.new(0, 150, 0, 70), 1, 60, 10)
 
-local function fastShake(duration)
-	local pan = getEquippedPan()
-	if not (pan and pan.Scripts and pan.Scripts:FindFirstChild("Shake")) then return end
-	local shakeFunc = pan.Scripts.Shake
-	local startTime = tick()
-
-	spawn(function()
-		while tick() - startTime < duration do
-			pcall(function() shakeFunc:FireServer() end)
-			task.wait(0)
-		end
-	end)
-end
-
--- GUI BUTTON CALLBACKS
-createButton("Start", 1, function()
-	startPosition = HRP.Position
-	local part = workspace:FindFirstChild("Dig Here")
-	if part then
-		farmDestination = part.Position
-		autoFarm4 = true
-	end
+-- Digging Position Storage
+local savedPosition = nil
+digHereBtn.MouseButton1Click:Connect(function()
+    local character = Players.LocalPlayer.Character
+    if character then
+        local hrp = character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            savedPosition = hrp.CFrame
+        end
+    end
 end)
 
-createButton("Stop", 2, function()
-	autoFarm4 = false
+-- Start AutoFarm
+startBtn.MouseButton1Click:Connect(function()
+    if not savedPosition then return end
+
+    local character = Players.LocalPlayer.Character
+    if not character then return end
+
+    local scripts = character:WaitForChild("Worldshaker"):WaitForChild("Scripts")
+
+    local digPoint = workspace:FindFirstChild("Dig Here")
+    if not digPoint then return end
+
+    local original = savedPosition
+    local target = digPoint.Position + Vector3.new(0, 5, 0)
+
+    task.spawn(function()
+        while true do
+            -- Move to dig point
+            character:PivotTo(CFrame.new(target))
+
+            -- Start digging
+            scripts.ToggleShovelActive:FireServer(true)
+
+            local sandTime = getSand()
+            local waterTime = getWater()
+            local endSand = tick() + sandTime
+
+            while tick() < endSand do
+                task.wait()
+            end
+
+            -- Finish digging
+            scripts.ToggleShovelActive:FireServer(false)
+            scripts.Collect:InvokeServer()
+            scripts.Collect:InvokeServer(1)
+
+            -- Return and shake
+            character:PivotTo(original)
+
+            local endWater = tick() + waterTime
+            while tick() < endWater do
+                scripts.Shake:FireServer()
+                task.wait()
+            end
+        end
+    end)
 end)
 
-createButton("Enchant", 3, function()
-	local args = {
-		Instance.new("Tool", nil)
-	}
-	ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Crafting"):WaitForChild("Enchant"):InvokeServer(unpack(args))
+-- Sell Button
+sellBtn.MouseButton1Click:Connect(function()
+    local sell = Players.LocalPlayer.Character:FindFirstChild("Worldshaker"):FindFirstChild("Scripts"):FindFirstChild("Sell")
+    if sell then sell:FireServer() end
 end)
 
--- AUTO FARM LOOP
-spawn(function()
-	while true do
-		if autoFarm4 and farmDestination and startPosition and HRP and Character then
-			pcall(function()
-				HRP.CFrame = CFrame.new(farmDestination)
-				wait(0.5)
+-- Enchant Button
+local enchantBtn = createButton("Enchant", UDim2.new(0, 10, 0, 130))
+enchantBtn.MouseButton1Click:Connect(function()
+    local args = { Instance.new("Tool", nil) }
+    game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Crafting"):WaitForChild("Enchant"):InvokeServer(unpack(args))
+end)
 
-				fastCollect(collectDuration)
-				task.wait(collectDuration + 0.1)
+-- Boost Toggle Variables
+local boostEnabled = false
 
-				HRP.CFrame = CFrame.new(startPosition)
-				wait(0.2)
+-- Boost Functions
+local function startBoost()
+    boostEnabled = true
+    task.spawn(function()
+        while boostEnabled do
+            pcall(function()
+                local character = Players.LocalPlayer.Character
+                local worldshaker = character and character:FindFirstChild("Worldshaker")
+                if worldshaker then
+                    local scripts = worldshaker:FindFirstChild("Scripts")
+                    if scripts then
+                        scripts:FindFirstChild("Collect"):InvokeServer()
+                        scripts:FindFirstChild("Shake"):FireServer()
+                        scripts:FindFirstChild("Pan"):InvokeServer()
 
-				fastShake(shakeDuration)
-				task.wait(shakeDuration + 0.1)
-			end)
-		end
-		wait(1)
-	end
+                        local args = {1}
+                        scripts:FindFirstChild("Collect"):InvokeServer(unpack(args))
+                    end
+                end
+            end)
+            task.wait()
+        end
+    end)
+end
+
+local function stopBoost()
+    boostEnabled = false
+end
+
+-- ปุ่ม Boost
+local boostBtn = createButton("Boost OFF", UDim2.new(0, 10, 0, 250))
+boostBtn.MouseButton1Click:Connect(function()
+    if boostEnabled then
+        stopBoost()
+        boostBtn.Text = "Boost OFF"
+    else
+        startBoost()
+        boostBtn.Text = "Boost ON"
+    end
 end)

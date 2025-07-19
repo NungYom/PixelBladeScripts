@@ -1,26 +1,24 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
 
-local LocalPlayer = Players.LocalPlayer
-local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local Character = player.Character or player.CharacterAdded:Wait()
 
--- GUI Container
-local guiParent = gethui and gethui() or LocalPlayer:WaitForChild("PlayerGui")
-if guiParent:FindFirstChild("FarmGui") then
-	guiParent.FarmGui:Destroy()
-end
+-- ล้าง GUI เก่า
+local old = playerGui:FindFirstChild("FarmGui")
+if old then old:Destroy() end
 
+-- สร้าง GUI ใหม่
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "FarmGui"
 screenGui.ResetOnSpawn = false
 screenGui.IgnoreGuiInset = true
 screenGui.DisplayOrder = 999
-screenGui.Parent = guiParent
-screenGui.BackgroundTransparency = 1
+screenGui.Parent = playerGui -- ✅ บังคับใช้ PlayerGui โดยตรง
 
--- GUI Background
+-- พื้นหลัง Frame
 local frame = Instance.new("Frame")
 frame.Size = UDim2.new(0, 220, 0, 170)
 frame.Position = UDim2.new(0, 20, 0, 300)
@@ -29,141 +27,35 @@ frame.BackgroundTransparency = 0.5
 frame.BorderSizePixel = 0
 frame.Parent = screenGui
 
--- Utility: Create Buttons
-local function createButton(name, yPos, color, callback)
-	local btn = Instance.new("TextButton")
-	btn.Name = name
-	btn.Text = name
-	btn.Size = UDim2.new(0, 200, 0, 30)
-	btn.Position = UDim2.new(0, 10, 0, yPos)
-	btn.BackgroundColor3 = color
-	btn.TextColor3 = Color3.new(1, 1, 1)
-	btn.Font = Enum.Font.SourceSansBold
-	btn.TextSize = 20
-	btn.Parent = frame
-	btn.MouseButton1Click:Connect(callback)
-	return btn
-end
+-- สร้างปุ่ม Sell
+local sellBtn = Instance.new("TextButton")
+sellBtn.Size = UDim2.new(0, 200, 0, 40)
+sellBtn.Position = UDim2.new(0, 10, 0, 10)
+sellBtn.Text = "Sell"
+sellBtn.BackgroundColor3 = Color3.fromRGB(255, 180, 50)
+sellBtn.TextColor3 = Color3.new(1, 1, 1)
+sellBtn.Font = Enum.Font.SourceSansBold
+sellBtn.TextSize = 20
+sellBtn.Parent = frame
 
--- Slide Bars
-local function createSlider(name, yPos, minValue, maxValue, default, callback)
-	local label = Instance.new("TextLabel")
-	label.Text = name
-	label.Size = UDim2.new(0, 60, 0, 20)
-	label.Position = UDim2.new(0, 10, 0, yPos)
-	label.BackgroundTransparency = 1
-	label.TextColor3 = Color3.new(1,1,1)
-	label.Font = Enum.Font.SourceSans
-	label.TextSize = 18
-	label.Parent = frame
-
-	local slider = Instance.new("TextButton")
-	slider.Size = UDim2.new(0, 120, 0, 20)
-	slider.Position = UDim2.new(0, 70, 0, yPos)
-	slider.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-	slider.Text = tostring(default)
-	slider.TextColor3 = Color3.new(1,1,1)
-	slider.Font = Enum.Font.SourceSans
-	slider.TextSize = 18
-	slider.Parent = frame
-
-	local dragging = false
-
-	slider.MouseButton1Down:Connect(function()
-		dragging = true
+sellBtn.MouseButton1Click:Connect(function()
+	pcall(function()
+		ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Shop"):WaitForChild("SellAll"):InvokeServer()
 	end)
-	slider.MouseButton1Up:Connect(function()
-		dragging = false
-	end)
-
-	RunService.RenderStepped:Connect(function()
-		if dragging then
-			local mouseX = LocalPlayer:GetMouse().X
-			local rel = math.clamp(mouseX - slider.AbsolutePosition.X, 0, slider.AbsoluteSize.X)
-			local percent = rel / slider.AbsoluteSize.X
-			local value = math.floor(minValue + (maxValue - minValue) * percent)
-			slider.Text = tostring(value)
-			callback(value)
-		end
-	end)
-end
-
--- Shared Configs
-local sandDuration = 3
-local waterDuration = 20
-
--- Sliders
-createSlider("Sand", 5, 1, 50, sandDuration, function(v)
-	sandDuration = v
-end)
-createSlider("Water", 30, 1, 50, waterDuration, function(v)
-	waterDuration = v
 end)
 
--- Toggle States
-local farm4Active = false
-local caveActive = false
+-- สร้างปุ่มวาร์ป
+local tpBtn = Instance.new("TextButton")
+tpBtn.Size = UDim2.new(0, 200, 0, 40)
+tpBtn.Position = UDim2.new(0, 10, 0, 60)
+tpBtn.Text = "Teleport to Cave"
+tpBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 255)
+tpBtn.TextColor3 = Color3.new(1, 1, 1)
+tpBtn.Font = Enum.Font.SourceSansBold
+tpBtn.TextSize = 20
+tpBtn.Parent = frame
 
--- Divine Pan Detector
-local function getTool()
-	for _, tool in ipairs(Character:GetChildren()) do
-		if tool:IsA("Tool") and tool.Name:lower():find("shovel") then
-			return tool
-		end
-	end
-end
-
--- Shake
-local function shake()
-	local tool = getTool()
-	if tool and tool:FindFirstChild("Scripts") then
-		local panScript = tool.Scripts:FindFirstChild("Pan")
-		local shakeRemote = tool.Scripts:FindFirstChild("Shake")
-		if panScript and shakeRemote then
-			panScript:InvokeServer()
-			task.wait(0.05)
-			shakeRemote:FireServer()
-		end
-	end
-end
-
--- Dig Button
-createButton("Dig Here", 55, Color3.fromRGB(100, 100, 255), function()
-	_G.digTarget = Character:WaitForChild("HumanoidRootPart").Position
-	Character:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.Jumping)
-end)
-
--- Auto Farm 4
-local autoFarm4Btn = createButton("Auto Farm4 : OFF", 90, Color3.fromRGB(180, 50, 50), function()
-	farm4Active = not farm4Active
-	autoFarm4Btn.Text = farm4Active and "Auto Farm4 : ON" or "Auto Farm4 : OFF"
-	autoFarm4Btn.BackgroundColor3 = farm4Active and Color3.fromRGB(50, 180, 50) or Color3.fromRGB(180, 50, 50)
-
-	while farm4Active do
-		if _G.digTarget then
-			local root = Character:WaitForChild("HumanoidRootPart")
-			root.CFrame = CFrame.new(_G.digTarget)
-			task.wait(sandDuration)
-			shake()
-			task.wait(waterDuration)
-		end
-		RunService.Heartbeat:Wait()
-	end
-end)
-
--- Auto Farm Cave
-local autoCaveBtn = createButton("Auto Farm Cave : OFF", 125, Color3.fromRGB(180, 50, 50), function()
-	caveActive = not caveActive
-	autoCaveBtn.Text = caveActive and "Auto Farm Cave : ON" or "Auto Farm Cave : OFF"
-	autoCaveBtn.BackgroundColor3 = caveActive and Color3.fromRGB(50, 180, 50) or Color3.fromRGB(180, 50, 50)
-
-	while caveActive do
-		Character:WaitForChild("HumanoidRootPart").CFrame = CFrame.new(-247, -41, 620)
-		RunService.Heartbeat:Wait()
-	end
-end)
-
--- Sell Button
-createButton("Sell", 160, Color3.fromRGB(255, 180, 50), function()
-	ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Shop"):WaitForChild("SellAll"):InvokeServer()
+tpBtn.MouseButton1Click:Connect(function()
+	local root = Character:WaitForChild("HumanoidRootPart")
+	root.CFrame = CFrame.new(-247, -41, 620)
 end)

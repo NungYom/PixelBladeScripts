@@ -134,6 +134,48 @@ local function getEquippedPan()
     return nil
 end
 
+local function fastCollect(duration)
+    local pan = getEquippedPan()
+    if not (pan and pan.Scripts and pan.Scripts:FindFirstChild("Collect")) then return end
+
+    local collectFunc = pan.Scripts.Collect
+    local startTime = tick()
+
+    spawn(function()
+        while tick() - startTime < duration do
+            local success1, err1 = pcall(function()
+                collectFunc:InvokeServer()
+            end)
+            local success2, err2 = pcall(function()
+                collectFunc:InvokeServer(1)
+            end)
+            if not success1 then warn("Collect error 1:", err1) end
+            if not success2 then warn("Collect error 2:", err2) end
+
+            task.wait(0)  -- รัวไวที่สุด
+        end
+    end)
+end
+
+local function fastShake(duration)
+    local pan = getEquippedPan()
+    if not (pan and pan.Scripts and pan.Scripts:FindFirstChild("Shake")) then return end
+
+    local shakeFunc = pan.Scripts.Shake
+    local startTime = tick()
+
+    spawn(function()
+        while tick() - startTime < duration do
+            local success, err = pcall(function()
+                shakeFunc:FireServer()
+            end)
+            if not success then warn("Shake error:", err) end
+
+            task.wait(0)  -- รัวไวที่สุด
+        end
+    end)
+end
+
 -- Events
 
 startBtn.MouseButton1Click:Connect(function()
@@ -185,30 +227,21 @@ spawn(function()
                 HRP.CFrame = CFrame.new(farmDestination)
                 wait(0.5)
 
-                -- ช่วง Sand (collectDuration): รัว Collect สองฟังก์ชัน
-                local startTime = tick()
-                while tick() - startTime < collectDuration do
-                    local pan = getEquippedPan()
-                    if pan and pan.Scripts and pan.Scripts:FindFirstChild("Collect") then
-                        pan.Scripts.Collect:InvokeServer()
-                        pan.Scripts.Collect:InvokeServer(1)
-                    end
-                    wait(0.03)
-                end
+                -- รัว Collect แบบเร็วที่สุด (ไม่บล็อก)
+                fastCollect(collectDuration)
+
+                -- รอให้ครบเวลาที่กำหนด
+                task.wait(collectDuration + 0.1)
 
                 -- วาร์ปกลับจุด Start
                 HRP.CFrame = CFrame.new(startPosition)
                 wait(0.2)
 
-                -- ช่วง Water (shakeDuration): รัว Shake ฟังก์ชัน
-                local shakeStart = tick()
-                while tick() - shakeStart < shakeDuration do
-                    local pan = getEquippedPan()
-                    if pan and pan.Scripts and pan.Scripts:FindFirstChild("Shake") then
-                        pan.Scripts.Shake:FireServer()
-                    end
-                    wait(0.03)
-                end
+                -- รัว Shake แบบเร็วที่สุด (ไม่บล็อก)
+                fastShake(shakeDuration)
+
+                -- รอให้ครบเวลาที่กำหนด
+                task.wait(shakeDuration + 0.1)
             end)
         end
         wait(1)

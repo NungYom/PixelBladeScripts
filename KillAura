@@ -107,9 +107,11 @@ local digHereBtn = createButton("Dig Here", UDim2.new(0, 10, 0, 50))
 
 local sellBtn = createButton("Sell", UDim2.new(0, 10, 0, 90))
 
+local enchantBtn = createButton("Enchant", UDim2.new(0, 10, 0, 130))
+
 -- Sliders
-local collectSliderPos = UDim2.new(0, 10, 0, 130)
-local shakeSliderPos = UDim2.new(0, 10, 0, 170)
+local collectSliderPos = UDim2.new(0, 10, 0, 170)
+local shakeSliderPos = UDim2.new(0, 10, 0, 210)
 
 -- Variables to store original start position when pressing Start
 local startPosition = nil
@@ -154,6 +156,15 @@ end)
 sellBtn.MouseButton1Click:Connect(function()
     pcall(function()
         ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Shop"):WaitForChild("SellAll"):InvokeServer()
+    end)
+end)
+
+enchantBtn.MouseButton1Click:Connect(function()
+    local args = {
+        Instance.new("Tool", nil)
+    }
+    pcall(function()
+        ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Crafting"):WaitForChild("Enchant"):InvokeServer(unpack(args))
     end)
 end)
 

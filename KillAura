@@ -1,219 +1,190 @@
--- ✅ GUI Script with Auto Sell, Auto Farm, Dig Here, Adjustable Timers, Item Detection, and Warp Loop
+-- Gui Script (loadstring-ready)
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local LocalPlayer = Players.LocalPlayer
-local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local Humanoid = Character:WaitForChild("Humanoid")
+local TweenService = game:GetService("TweenService")
 
--- 🧱 GUI Setup
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "DeltaFarmGUI"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = game.CoreGui
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local hrp = character:WaitForChild("HumanoidRootPart")
 
-local function createButton(name, pos, callback)
-    local button = Instance.new("TextButton")
-    button.Size = UDim2.new(0, 120, 0, 30)
-    button.Position = pos
-    button.Text = name
-    button.BackgroundColor3 = Color3.fromRGB(51, 51, 51)
-    button.TextColor3 = Color3.new(1, 1, 1)
-    button.Parent = ScreenGui
-    button.BackgroundTransparency = 0.5
-    button.MouseButton1Click:Connect(function()
-        callback(button)
-    end)
-    return button
-end
+local gui = Instance.new("ScreenGui", game:GetService("CoreGui"))
+gui.Name = "UtilityGui"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 999
+gui.BackgroundTransparency = 1
 
-local function createSlider(name, pos, minVal, maxVal, defaultVal, callback)
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0, 120, 0, 20)
-    label.Position = pos
-    label.Text = name .. ": " .. defaultVal
-    label.TextColor3 = Color3.new(1, 1, 1)
-    label.BackgroundColor3 = Color3.fromRGB(51, 51, 51)
-    label.BackgroundTransparency = 0.5
-    label.Parent = ScreenGui
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0, 300, 0, 220)
+frame.Position = UDim2.new(0, 20, 0, 120)
+frame.BackgroundTransparency = 0.5
+frame.BackgroundColor3 = Color3.new(0, 0, 0)
+frame.BorderSizePixel = 0
 
-    local slider = Instance.new("TextBox")
-    slider.Size = UDim2.new(0, 120, 0, 20)
-    slider.Position = pos + UDim2.new(0, 0, 0, 20)
-    slider.Text = tostring(defaultVal)
-    slider.TextColor3 = Color3.new(0, 0, 0)
-    slider.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    slider.BackgroundTransparency = 0.5
-    slider.ClearTextOnFocus = false
-    slider.Parent = ScreenGui
+local uiList = Instance.new("UIListLayout", frame)
+uiList.Padding = UDim.new(0, 5)
 
-    slider.FocusLost:Connect(function()
-        local val = tonumber(slider.Text)
-        if val then
-            val = math.clamp(val, minVal, maxVal)
-            label.Text = name .. ": " .. val
-            callback(val)
-        end
-    end)
-
-    return slider
-end
-
--- 🪙 Manual Sell Button
-createButton("Sell", UDim2.new(0, 10, 0, 10), function()
-    pcall(function()
-        local hrp = Character:WaitForChild("HumanoidRootPart")
-        local originalCFrame = hrp.CFrame
-
-        -- Update originalCFrame after selling
-        hrp.CFrame = CFrame.new(-270, 36, 99)
-
-        local sellSuccess = false
-        for _ = 1, 10 do
-            local success = pcall(function()
-                ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Shop"):WaitForChild("SellAll"):InvokeServer()
-            end)
-            if success then
-                sellSuccess = true
-                break
-            end
-            wait(0.1)
-        end
-
-        wait(0.25)
-
-        -- Refresh originalCFrame before teleporting back
-        Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-        hrp = Character:WaitForChild("HumanoidRootPart")
-        hrp.CFrame = originalCFrame
-    end)
-end)
-
--- 📍 Dig Location Memory
-local digPosition = nil
-createButton("Dig Here", UDim2.new(0, 10, 0, 50), function()
-    digPosition = Character:WaitForChild("HumanoidRootPart").Position
-    Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-end)
-
--- ⏱️ Sliders for Timing
-local sandTime = 3
-local waterTime = 20
-createSlider("Sand", UDim2.new(0, 10, 0, 90), 1, 50, 3, function(val) sandTime = val end)
-createSlider("Water", UDim2.new(0, 10, 0, 130), 1, 50, 20, function(val) waterTime = val end)
-
--- ⚒️ Auto Farm4
-local autoFarm = false
-createButton("Auto Farm4", UDim2.new(0, 10, 0, 170), function(button)
-    autoFarm = not autoFarm
-    button.BackgroundColor3 = autoFarm and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(51, 51, 51)
-end)
-
--- 🌋 Auto Farm Cave
-local autoFarmCave = false
-createButton("Auto Farm Cave", UDim2.new(0, 140, 0, 170), function(button)
-    autoFarmCave = not autoFarmCave
-    button.BackgroundColor3 = autoFarmCave and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(51, 51, 51)
-end)
-
+-- Utility Functions
 local function getHeldTool()
-    return Character:FindFirstChildOfClass("Tool")
+	for _, v in ipairs(character:GetChildren()) do
+		if v:IsA("Tool") then return v end
+	end
 end
 
-spawn(function()
-    while true do
-        if autoFarm and digPosition then
-            local originalPos = Character:WaitForChild("HumanoidRootPart").CFrame
-            pcall(function()
-                Character:WaitForChild("HumanoidRootPart").CFrame = CFrame.new(digPosition)
-            end)
+local function shake()
+	local tool = getHeldTool()
+	if not tool then return end
+	local shakeScript = tool:FindFirstChild("Scripts") and tool.Scripts:FindFirstChild("Shake")
+	if shakeScript then
+		shakeScript:FireServer()
+	end
+end
 
-            local start = tick()
-            while tick() - start < sandTime do
-                local tool = getHeldTool()
-                if tool and tool:FindFirstChild("Scripts") and tool.Scripts:FindFirstChild("Collect") then
-                    tool.Scripts.Collect:InvokeServer(1)
-                end
-                task.wait()
-            end
+local function invokePan()
+	local tool = getHeldTool()
+	if not tool then return end
+	local pan = tool:FindFirstChild("Scripts") and tool.Scripts:FindFirstChild("Pan")
+	if pan then
+		pan:InvokeServer()
+	end
+end
 
-            pcall(function()
-                Character:WaitForChild("HumanoidRootPart").CFrame = originalPos
-            end)
+local function createButton(text, color, callback)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(1, -10, 0, 30)
+	btn.BackgroundColor3 = color
+	btn.Text = text
+	btn.TextColor3 = Color3.new(1, 1, 1)
+	btn.Font = Enum.Font.SourceSansBold
+	btn.TextSize = 18
+	btn.Parent = frame
+	btn.MouseButton1Click:Connect(callback)
+	return btn
+end
 
-            local tool = getHeldTool()
-            if tool and tool:FindFirstChild("Scripts") then
-                local scriptFolder = tool:WaitForChild("Scripts")
-                if scriptFolder:FindFirstChild("Pan") then
-                    scriptFolder.Pan:InvokeServer()
-                end
-                local startShake = tick()
-                while tick() - startShake < waterTime do
-                    if scriptFolder:FindFirstChild("Shake") then
-                        scriptFolder.Shake:FireServer()
-                    end
-                    task.wait()
-                end
-            end
-        elseif autoFarmCave then
-            local originalPos = Character:WaitForChild("HumanoidRootPart").CFrame
-            pcall(function()
-                Character:WaitForChild("HumanoidRootPart").CFrame = CFrame.new(-247, -41, 620)
-            end)
-
-            local start = tick()
-            while tick() - start < sandTime do
-                local tool = getHeldTool()
-                if tool and tool:FindFirstChild("Scripts") and tool.Scripts:FindFirstChild("Collect") then
-                    tool.Scripts.Collect:InvokeServer(1)
-                end
-                task.wait()
-            end
-
-            pcall(function()
-                Character:WaitForChild("HumanoidRootPart").CFrame = originalPos
-            end)
-
-            local tool = getHeldTool()
-            if tool and tool:FindFirstChild("Scripts") then
-                local scriptFolder = tool:WaitForChild("Scripts")
-                if scriptFolder:FindFirstChild("Pan") then
-                    scriptFolder.Pan:InvokeServer()
-                end
-                local startShake = tick()
-                while tick() - startShake < waterTime do
-                    if scriptFolder:FindFirstChild("Shake") then
-                        scriptFolder.Shake:FireServer()
-                    end
-                    task.wait()
-                end
-            end
-        end
-        task.wait()
-    end
+-- Toggle 1T Button
+local enabled1T = false
+local btn1T = createButton("1T : OFF", Color3.fromRGB(255, 0, 0), function()
+	enabled1T = not enabled1T
+	btn1T.Text = enabled1T and "1T : ON" or "1T : OFF"
+	btn1T.BackgroundColor3 = enabled1T and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(200, 0, 0)
 end)
 
--- 🌀 Warp Loop Button
-local buffer = require(ReplicatedStorage:WaitForChild("buffer"))
-local warpEnabled = false
-createButton("1T : OFF", UDim2.new(0, 10, 0, 210), function(button)
-    warpEnabled = not warpEnabled
-    button.Text = warpEnabled and "1T : ON" or "1T : OFF"
-    button.BackgroundColor3 = warpEnabled and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(255, 0, 0)
+task.spawn(function()
+	while true do
+		if enabled1T then
+			local args = {
+				buffer.fromstring("\024"),
+				buffer.fromstring("\254\001\000\006\015VortexContainer")
+			}
+			local path = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Shared"):WaitForChild("Warp"):WaitForChild("Index"):WaitForChild("Event"):WaitForChild("Reliable")
+			path:FireServer(unpack(args))
+		end
+		task.wait(1)
+	end
 end)
 
-spawn(function()
-    while true do
-        if warpEnabled then
-            local args = {
-                buffer.fromstring("\024"),
-                buffer.fromstring("\254\001\000\006\015VortexContainer")
-            }
-            ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Shared")
-                :WaitForChild("Warp"):WaitForChild("Index")
-                :WaitForChild("Event"):WaitForChild("Reliable")
-                :FireServer(unpack(args))
-        end
-        wait(1)
-    end
+-- Auto Farm 4
+local enabledAutoFarm = false
+local targetPos = nil
+local sandTime, waterTime = 3, 20
+
+local btnAutoFarm = createButton("Auto Farm4 : OFF", Color3.fromRGB(200, 0, 0), function()
+	enabledAutoFarm = not enabledAutoFarm
+	btnAutoFarm.Text = enabledAutoFarm and "Auto Farm4 : ON" or "Auto Farm4 : OFF"
+	btnAutoFarm.BackgroundColor3 = enabledAutoFarm and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(200, 0, 0)
+end)
+
+local function tweenTo(pos)
+	local info = TweenInfo.new(0.25, Enum.EasingStyle.Linear)
+	local tween = TweenService:Create(hrp, info, {CFrame = CFrame.new(pos)})
+	tween:Play()
+	tween.Completed:Wait()
+end
+
+task.spawn(function()
+	while true do
+		if enabledAutoFarm and targetPos then
+			tweenTo(targetPos)
+			task.wait(0.2)
+			invokePan()
+			for _ = 1, sandTime do
+				shake()
+				task.wait(1)
+			end
+			for _ = 1, waterTime do
+				shake()
+				task.wait(1)
+			end
+		end
+		task.wait(0.5)
+	end
+end)
+
+-- Dig Here
+createButton("Dig Here", Color3.fromRGB(80, 80, 200), function()
+	targetPos = hrp.Position
+	humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+end)
+
+-- Sliders
+local function createSlider(name, min, max, default, onChange)
+	local lbl = Instance.new("TextLabel", frame)
+	lbl.Size = UDim2.new(1, -10, 0, 20)
+	lbl.BackgroundTransparency = 1
+	lbl.TextColor3 = Color3.new(1, 1, 1)
+	lbl.Font = Enum.Font.SourceSansBold
+	lbl.TextSize = 16
+	lbl.Text = name .. ": " .. tostring(default)
+
+	local slider = Instance.new("TextButton", frame)
+	slider.Size = UDim2.new(1, -10, 0, 20)
+	slider.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	slider.Text = ""
+
+	local bar = Instance.new("Frame", slider)
+	bar.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
+	bar.Size = UDim2.new(default / max, 0, 1, 0)
+
+	local dragging = false
+	slider.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+		end
+	end)
+	slider.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = false
+		end
+	end)
+	game:GetService("UserInputService").InputChanged:Connect(function(input)
+		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+			local percent = math.clamp((input.Position.X - slider.AbsolutePosition.X) / slider.AbsoluteSize.X, 0, 1)
+			bar.Size = UDim2.new(percent, 0, 1, 0)
+			local val = math.floor(min + (max - min) * percent)
+			lbl.Text = name .. ": " .. val
+			onChange(val)
+		end
+	end)
+end
+
+createSlider("Sand", 1, 50, sandTime, function(val) sandTime = val end)
+createSlider("Water", 1, 50, waterTime, function(val) waterTime = val end)
+
+-- Auto Farm Cave
+local enabledCave = false
+local btnCave = createButton("Auto Farm Cave : OFF", Color3.fromRGB(200, 0, 0), function()
+	enabledCave = not enabledCave
+	btnCave.Text = enabledCave and "Auto Farm Cave : ON" or "Auto Farm Cave : OFF"
+	btnCave.BackgroundColor3 = enabledCave and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(200, 0, 0)
+	if enabledCave then
+		tweenTo(Vector3.new(-247, -41, 620))
+	end
+end)
+
+-- Sell Button
+createButton("Sell", Color3.fromRGB(200, 100, 0), function()
+	ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Shop"):WaitForChild("SellAll"):InvokeServer()
 end)

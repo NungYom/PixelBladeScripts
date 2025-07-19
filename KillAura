@@ -1,61 +1,159 @@
+-- Gui Script สำหรับ Roblox พร้อมปุ่มควบคุมและฟังก์ชัน
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 
-local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
-local Character = player.Character or player.CharacterAdded:Wait()
+-- GUI Container
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "FarmGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
+ScreenGui.DisplayOrder = 1000
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = PlayerGui
+ScreenGui.BackgroundTransparency = 0.5
 
--- ล้าง GUI เก่า
-local old = playerGui:FindFirstChild("FarmGui")
-if old then old:Destroy() end
+-- Utility Function
+local function createButton(text, position)
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(0, 120, 0, 30)
+    button.Position = position
+    button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.Text = text
+    button.Parent = ScreenGui
+    button.Font = Enum.Font.SourceSans
+    button.TextSize = 18
+    button.AutoButtonColor = true
+    return button
+end
 
--- สร้าง GUI ใหม่
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "FarmGui"
-screenGui.ResetOnSpawn = false
-screenGui.IgnoreGuiInset = true
-screenGui.DisplayOrder = 999
-screenGui.Parent = playerGui -- ✅ บังคับใช้ PlayerGui โดยตรง
+local function createSlider(name, position, defaultValue, callback)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 140, 0, 40)
+    frame.Position = position
+    frame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    frame.Parent = ScreenGui
 
--- พื้นหลัง Frame
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 220, 0, 170)
-frame.Position = UDim2.new(0, 20, 0, 300)
-frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-frame.BackgroundTransparency = 0.5
-frame.BorderSizePixel = 0
-frame.Parent = screenGui
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0.5, 0)
+    label.Position = UDim2.new(0, 0, 0, 0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.Font = Enum.Font.SourceSans
+    label.TextSize = 16
+    label.Text = name .. ": " .. defaultValue
+    label.Parent = frame
 
--- สร้างปุ่ม Sell
-local sellBtn = Instance.new("TextButton")
-sellBtn.Size = UDim2.new(0, 200, 0, 40)
-sellBtn.Position = UDim2.new(0, 10, 0, 10)
-sellBtn.Text = "Sell"
-sellBtn.BackgroundColor3 = Color3.fromRGB(255, 180, 50)
-sellBtn.TextColor3 = Color3.new(1, 1, 1)
-sellBtn.Font = Enum.Font.SourceSansBold
-sellBtn.TextSize = 20
-sellBtn.Parent = frame
+    local slider = Instance.new("TextButton")
+    slider.Size = UDim2.new(1, 0, 0.5, 0)
+    slider.Position = UDim2.new(0, 0, 0.5, 0)
+    slider.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+    slider.Text = "Change"
+    slider.TextColor3 = Color3.fromRGB(255, 255, 255)
+    slider.Font = Enum.Font.SourceSans
+    slider.TextSize = 14
+    slider.Parent = frame
 
-sellBtn.MouseButton1Click:Connect(function()
-	pcall(function()
-		ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Shop"):WaitForChild("SellAll"):InvokeServer()
-	end)
+    local value = defaultValue
+    slider.MouseButton1Click:Connect(function()
+        value = (value % 50) + 1
+        label.Text = name .. ": " .. value
+        callback(value)
+    end)
+end
+
+-- Variables
+local oneTEnabled = false
+local autoFarmCaveEnabled = false
+local sandDuration = 3
+local waterDuration = 20
+
+-- 1T Toggle
+local oneTBtn = createButton("1T : OFF", UDim2.new(0, 10, 0, 10))
+oneTBtn.MouseButton1Click:Connect(function()
+    oneTEnabled = not oneTEnabled
+    oneTBtn.Text = oneTEnabled and "1T : ON" or "1T : OFF"
+    oneTBtn.BackgroundColor3 = oneTEnabled and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
 end)
 
--- สร้างปุ่มวาร์ป
-local tpBtn = Instance.new("TextButton")
-tpBtn.Size = UDim2.new(0, 200, 0, 40)
-tpBtn.Position = UDim2.new(0, 10, 0, 60)
-tpBtn.Text = "Teleport to Cave"
-tpBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 255)
-tpBtn.TextColor3 = Color3.new(1, 1, 1)
-tpBtn.Font = Enum.Font.SourceSansBold
-tpBtn.TextSize = 20
-tpBtn.Parent = frame
+-- Auto Farm Cave Button
+local caveBtn = createButton("Auto Farm Cave : OFF", UDim2.new(0, 10, 0, 50))
+caveBtn.MouseButton1Click:Connect(function()
+    autoFarmCaveEnabled = not autoFarmCaveEnabled
+    caveBtn.Text = autoFarmCaveEnabled and "Auto Farm Cave : ON" or "Auto Farm Cave : OFF"
+    caveBtn.BackgroundColor3 = autoFarmCaveEnabled and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+    if autoFarmCaveEnabled then
+        local root = Character:FindFirstChild("HumanoidRootPart")
+        if root then
+            root.CFrame = CFrame.new(-247, -41, 620)
+        end
+    end
+end)
 
-tpBtn.MouseButton1Click:Connect(function()
-	local root = Character:WaitForChild("HumanoidRootPart")
-	root.CFrame = CFrame.new(-247, -41, 620)
+-- Sell Button
+local sellBtn = createButton("Sell", UDim2.new(0, 10, 0, 90))
+sellBtn.MouseButton1Click:Connect(function()
+    local root = Character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    local originalCFrame = root.CFrame
+    local targetPosition = Vector3.new(-270, 36, 99)
+    local startTime = tick()
+    local reachedTarget = false
+
+    local function closeEnough()
+        return (root.Position - targetPosition).Magnitude < 3
+    end
+
+    spawn(function()
+        while not reachedTarget do
+            root.CFrame = CFrame.new(targetPosition)
+            if closeEnough() then
+                if tick() - startTime >= 1 then
+                    reachedTarget = true
+                    ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Shop"):WaitForChild("SellAll"):InvokeServer()
+                    task.wait(0.1)
+                    while (root.Position - originalCFrame.Position).Magnitude > 3 do
+                        root.CFrame = originalCFrame
+                        task.wait(0.05)
+                    end
+                end
+            else
+                startTime = tick()
+            end
+            task.wait(0.05)
+        end
+    end)
+end)
+
+-- Sliders
+createSlider("Sand", UDim2.new(0, 150, 0, 10), sandDuration, function(v)
+    sandDuration = v
+end)
+
+createSlider("Water", UDim2.new(0, 150, 0, 60), waterDuration, function(v)
+    waterDuration = v
+end)
+
+-- Loop Task
+spawn(function()
+    while true do
+        if oneTEnabled then
+            local buffer = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Shared"):WaitForChild("Buffer"))
+            local args = {
+                buffer.fromstring("\024"),
+                buffer.fromstring("\254\001\000\006\015VortexContainer")
+            }
+            ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Shared"):WaitForChild("Warp")
+                :WaitForChild("Index"):WaitForChild("Event"):WaitForChild("Reliable")
+                :FireServer(unpack(args))
+        end
+        task.wait(1)
+    end
 end)

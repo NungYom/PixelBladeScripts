@@ -6,7 +6,6 @@ local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 
 -- GUI Container
 local ScreenGui = Instance.new("ScreenGui")
@@ -15,8 +14,7 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.DisplayOrder = 1000
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ScreenGui.Parent = PlayerGui
-ScreenGui.BackgroundTransparency = 0.5
+ScreenGui.Parent = game:GetService("CoreGui")
 
 -- Utility Function
 local function createButton(text, position)
@@ -83,49 +81,55 @@ oneTBtn.MouseButton1Click:Connect(function()
 end)
 
 -- Auto Farm Cave Button
-local caveBtn = createButton("Auto Farm Cave : OFF", UDim2.new(0, 10, 0, 50))
+local caveBtn = createButton("Auto Farm Cave", UDim2.new(0, 10, 0, 50))
 caveBtn.MouseButton1Click:Connect(function()
-    autoFarmCaveEnabled = not autoFarmCaveEnabled
-    caveBtn.Text = autoFarmCaveEnabled and "Auto Farm Cave : ON" or "Auto Farm Cave : OFF"
-    caveBtn.BackgroundColor3 = autoFarmCaveEnabled and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
-    if autoFarmCaveEnabled then
-        local root = Character:FindFirstChild("HumanoidRootPart")
-        if root then
-            root.CFrame = CFrame.new(-247, -41, 620)
-        end
+    local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if root then
+        root.CFrame = CFrame.new(-247, -41, 620)
     end
 end)
 
 -- Sell Button
 local sellBtn = createButton("Sell", UDim2.new(0, 10, 0, 90))
 sellBtn.MouseButton1Click:Connect(function()
-    local root = Character:FindFirstChild("HumanoidRootPart")
+    local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local root = character:FindFirstChild("HumanoidRootPart")
     if not root then return end
 
     local originalCFrame = root.CFrame
     local targetPosition = Vector3.new(-270, 36, 99)
-    local startTime = tick()
     local reachedTarget = false
-
-    local function closeEnough()
-        return (root.Position - targetPosition).Magnitude < 3
-    end
+    local arrivedAtTargetTime
 
     spawn(function()
         while not reachedTarget do
             root.CFrame = CFrame.new(targetPosition)
-            if closeEnough() then
-                if tick() - startTime >= 1 then
+            if (root.Position - targetPosition).Magnitude < 3 then
+                if not arrivedAtTargetTime then
+                    arrivedAtTargetTime = tick()
+                elseif tick() - arrivedAtTargetTime >= 1 then
                     reachedTarget = true
                     ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Shop"):WaitForChild("SellAll"):InvokeServer()
                     task.wait(0.1)
-                    while (root.Position - originalCFrame.Position).Magnitude > 3 do
+                    local backReached = false
+                    local returnTime
+                    while not backReached do
                         root.CFrame = originalCFrame
+                        if (root.Position - originalCFrame.Position).Magnitude < 3 then
+                            if not returnTime then
+                                returnTime = tick()
+                            elseif tick() - returnTime >= 1 then
+                                backReached = true
+                            end
+                        else
+                            returnTime = nil
+                        end
                         task.wait(0.05)
                     end
                 end
             else
-                startTime = tick()
+                arrivedAtTargetTime = nil
             end
             task.wait(0.05)
         end

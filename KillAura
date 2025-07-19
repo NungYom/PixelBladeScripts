@@ -2,6 +2,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -9,11 +10,10 @@ local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local HRP = Character:WaitForChild("HumanoidRootPart")
 
 -- State
-local autoSell = false
 local autoFarm4 = false
 local farmDestination = nil
-local collectDuration = 3
-local shakeDuration = 20
+local collectDuration = 3 -- Sand slider (วินาที)
+local shakeDuration = 20  -- Water slider (วินาที)
 
 -- GUI Creation
 local ScreenGui = Instance.new("ScreenGui")
@@ -87,7 +87,7 @@ local function createSlider(name, pos, defaultValue, callback)
 
     RunService.RenderStepped:Connect(function()
         if dragging then
-            local mouseX = game:GetService("UserInputService"):GetMouseLocation().X
+            local mouseX = UserInputService:GetMouseLocation().X
             local frameX = sliderFrame.AbsolutePosition.X
             local percent = math.clamp((mouseX - frameX) / sliderFrame.AbsoluteSize.X, 0, 1)
             local value = math.floor(percent * 49) + 1
@@ -100,50 +100,21 @@ end
 
 -- Buttons
 
--- Auto Sell All Toggle
-local autoSellBtn = createButton("Auto Sell All: OFF", UDim2.new(0, 10, 0, 10))
-autoSellBtn.MouseButton1Click:Connect(function()
-    autoSell = not autoSell
-    autoSellBtn.Text = "Auto Sell All: " .. (autoSell and "ON" or "OFF")
-    autoSellBtn.BackgroundColor3 = autoSell and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
-end)
+local startBtn = createButton("Start: OFF", UDim2.new(0, 10, 0, 10))
+startBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
 
--- Auto Farm4 Toggle
-local autoFarm4Btn = createButton("Auto Farm4: OFF", UDim2.new(0, 10, 0, 50))
-autoFarm4Btn.MouseButton1Click:Connect(function()
-    autoFarm4 = not autoFarm4
-    autoFarm4Btn.Text = "Auto Farm4: " .. (autoFarm4 and "ON" or "OFF")
-    autoFarm4Btn.BackgroundColor3 = autoFarm4 and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
-end)
+local digHereBtn = createButton("Dig Here", UDim2.new(0, 10, 0, 50))
 
--- Dig Here Button (set farmDestination)
-local digHereBtn = createButton("Dig Here", UDim2.new(0, 10, 0, 90))
-digHereBtn.MouseButton1Click:Connect(function()
-    farmDestination = HRP.Position
-    Character:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.Jumping)
-end)
-
--- Sell Button (immediate sell, no warp)
-local sellBtn = createButton("Sell", UDim2.new(0, 10, 0, 130))
-sellBtn.MouseButton1Click:Connect(function()
-    pcall(function()
-        ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Shop"):WaitForChild("SellAll"):InvokeServer()
-    end)
-end)
+local sellBtn = createButton("Sell", UDim2.new(0, 10, 0, 90))
 
 -- Sliders
-local collectSliderPos = UDim2.new(0, 10, 0, 170)
-local shakeSliderPos = UDim2.new(0, 10, 0, 210)
+local collectSliderPos = UDim2.new(0, 10, 0, 130)
+local shakeSliderPos = UDim2.new(0, 10, 0, 170)
 
-createSlider("Sand", collectSliderPos, collectDuration, function(value)
-    collectDuration = value
-end)
+-- Variables to store original start position when pressing Start
+local startPosition = nil
 
-createSlider("Water", shakeSliderPos, shakeDuration, function(value)
-    shakeDuration = value
-end)
-
--- Helper to get equipped pan/tool name
+-- Helper Functions
 local function getEquippedPanName()
     for _, tool in pairs(Character:GetChildren()) do
         if tool:IsA("Tool") and string.find(tool.Name, "Pan") then
@@ -153,57 +124,79 @@ local function getEquippedPanName()
     return nil
 end
 
--- Auto Sell Loop
-spawn(function()
-    while true do
-        if autoSell then
-            pcall(function()
-                ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Shop"):WaitForChild("SellAll"):InvokeServer()
-            end)
-        end
-        wait(10)
+local function getEquippedPan()
+    local panName = getEquippedPanName()
+    if panName then
+        return Character:FindFirstChild(panName)
+    end
+    return nil
+end
+
+-- Events
+
+startBtn.MouseButton1Click:Connect(function()
+    autoFarm4 = not autoFarm4
+    startBtn.Text = "Start: " .. (autoFarm4 and "ON" or "OFF")
+    startBtn.BackgroundColor3 = autoFarm4 and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+
+    if autoFarm4 then
+        startPosition = HRP.Position
+    else
+        startPosition = nil
     end
 end)
 
--- Auto Farm4 Loop
+digHereBtn.MouseButton1Click:Connect(function()
+    farmDestination = HRP.Position
+    Character:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.Jumping)
+end)
+
+sellBtn.MouseButton1Click:Connect(function()
+    pcall(function()
+        ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Shop"):WaitForChild("SellAll"):InvokeServer()
+    end)
+end)
+
+createSlider("Sand", collectSliderPos, collectDuration, function(value)
+    collectDuration = value
+end)
+
+createSlider("Water", shakeSliderPos, shakeDuration, function(value)
+    shakeDuration = value
+end)
+
+-- Main AutoFarm Loop
 spawn(function()
     while true do
-        if autoFarm4 and farmDestination then
+        if autoFarm4 and farmDestination and startPosition and HRP and Character then
             pcall(function()
-                local originalPos = HRP.Position
+                -- วาร์ปไปจุด Dig Here
                 HRP.CFrame = CFrame.new(farmDestination)
+                wait(0.5)
 
-                -- Collect
+                -- ช่วง Sand (collectDuration): รัว Collect สองฟังก์ชัน
                 local startTime = tick()
                 while tick() - startTime < collectDuration do
-                    local panName = getEquippedPanName()
-                    local pan = Character:FindFirstChild(panName or "")
-                    if pan and pan:FindFirstChild("Scripts") and pan.Scripts:FindFirstChild("Collect") then
+                    local pan = getEquippedPan()
+                    if pan and pan.Scripts and pan.Scripts:FindFirstChild("Collect") then
+                        pan.Scripts.Collect:InvokeServer()
                         pan.Scripts.Collect:InvokeServer(1)
                     end
-                    wait(0.05)
+                    wait(0.03)
                 end
 
-                -- Return
-                HRP.CFrame = CFrame.new(originalPos)
+                -- วาร์ปกลับจุด Start
+                HRP.CFrame = CFrame.new(startPosition)
                 wait(0.2)
 
-                -- Fire Pan.InvokeServer before Shake using current pan
-                local panName = getEquippedPanName()
-                local pan = Character:FindFirstChild(panName or "")
-                if pan and pan:FindFirstChild("Scripts") and pan.Scripts:FindFirstChild("Pan") then
-                    pan.Scripts.Pan:InvokeServer()
-                end
-
-                -- Shake
+                -- ช่วง Water (shakeDuration): รัว Shake ฟังก์ชัน
                 local shakeStart = tick()
                 while tick() - shakeStart < shakeDuration do
-                    panName = getEquippedPanName()
-                    pan = Character:FindFirstChild(panName or "")
-                    if pan and pan:FindFirstChild("Scripts") and pan.Scripts:FindFirstChild("Shake") then
+                    local pan = getEquippedPan()
+                    if pan and pan.Scripts and pan.Scripts:FindFirstChild("Shake") then
                         pan.Scripts.Shake:FireServer()
                     end
-                    wait(0.05)
+                    wait(0.03)
                 end
             end)
         end

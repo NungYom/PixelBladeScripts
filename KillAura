@@ -1,249 +1,115 @@
--- Services
+-- UI SETUP
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-
 local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local HRP = Character:WaitForChild("HumanoidRootPart")
 
--- State
-local autoFarm4 = false
-local farmDestination = nil
-local collectDuration = 3 -- Sand slider (วินาที)
-local shakeDuration = 20  -- Water slider (วินาที)
-
--- GUI Creation
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "AutoFarmUI"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = PlayerGui
-ScreenGui.IgnoreGuiInset = true
-ScreenGui.DisplayOrder = 1000
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = game:GetService("CoreGui")
 
--- Utility Functions
-local function createButton(name, pos, callback)
-    local button = Instance.new("TextButton")
-    button.Size = UDim2.new(0, 120, 0, 30)
-    button.Position = pos
-    button.BackgroundColor3 = Color3.fromRGB(51, 51, 51)
-    button.BackgroundTransparency = 0.5
-    button.TextColor3 = Color3.new(1,1,1)
-    button.Text = name
-    button.Font = Enum.Font.SourceSans
-    button.TextSize = 18
-    button.Parent = ScreenGui
-    button.MouseButton1Click:Connect(callback)
-    return button
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 200, 0, 180)
+mainFrame.Position = UDim2.new(0, 20, 0, 200)
+mainFrame.BackgroundTransparency = 0.3
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainFrame.Parent = ScreenGui
+
+local function createButton(text, order, callback)
+	local button = Instance.new("TextButton")
+	button.Size = UDim2.new(1, -20, 0, 30)
+	button.Position = UDim2.new(0, 10, 0, 10 + (order - 1) * 40)
+	button.Text = text
+	button.TextColor3 = Color3.new(1, 1, 1)
+	button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	button.Font = Enum.Font.SourceSansBold
+	button.TextSize = 18
+	button.MouseButton1Click:Connect(callback)
+	button.Parent = mainFrame
 end
 
-local function createSlider(name, pos, defaultValue, callback)
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0, 120, 0, 20)
-    label.Position = pos
-    label.BackgroundTransparency = 0.5
-    label.TextColor3 = Color3.new(1, 1, 1)
-    label.Font = Enum.Font.SourceSans
-    label.TextSize = 16
-    label.Text = name .. ": " .. tostring(defaultValue)
-    label.Parent = ScreenGui
-
-    local sliderFrame = Instance.new("Frame")
-    sliderFrame.Size = UDim2.new(0, 120, 0, 10)
-    sliderFrame.Position = pos + UDim2.new(0, 0, 0, 20)
-    sliderFrame.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-    sliderFrame.BackgroundTransparency = 0.5
-    sliderFrame.BorderSizePixel = 0
-    sliderFrame.Parent = ScreenGui
-
-    local knob = Instance.new("Frame")
-    knob.Size = UDim2.new(0, 15, 0, 15)
-    knob.Position = UDim2.new((defaultValue - 1) / 49, 0, -0.25, 0)
-    knob.BackgroundColor3 = Color3.new(1, 1, 1)
-    knob.BackgroundTransparency = 0.5
-    knob.BorderSizePixel = 0
-    knob.Parent = sliderFrame
-
-    local dragging = false
-
-    knob.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-        end
-    end)
-    knob.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
-    end)
-    sliderFrame.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
-    end)
-
-    RunService.RenderStepped:Connect(function()
-        if dragging then
-            local mouseX = UserInputService:GetMouseLocation().X
-            local frameX = sliderFrame.AbsolutePosition.X
-            local percent = math.clamp((mouseX - frameX) / sliderFrame.AbsoluteSize.X, 0, 1)
-            local value = math.floor(percent * 49) + 1
-            knob.Position = UDim2.new((value - 1) / 49, 0, -0.25, 0)
-            label.Text = name .. ": " .. tostring(value)
-            callback(value)
-        end
-    end)
-end
-
--- Buttons
-
-local startBtn = createButton("Start: OFF", UDim2.new(0, 10, 0, 10))
-startBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
-
-local digHereBtn = createButton("Dig Here", UDim2.new(0, 10, 0, 50))
-
-local sellBtn = createButton("Sell", UDim2.new(0, 10, 0, 90))
-
-local enchantBtn = createButton("Enchant", UDim2.new(0, 10, 0, 130))
-
--- Sliders
-local collectSliderPos = UDim2.new(0, 10, 0, 170)
-local shakeSliderPos = UDim2.new(0, 10, 0, 210)
-
--- Variables to store original start position when pressing Start
+-- VARIABLES
+local autoFarm4 = false
 local startPosition = nil
+local farmDestination = nil
+local collectDuration = 7
+local shakeDuration = 10
 
--- Helper Functions
-local function getEquippedPanName()
-    for _, tool in pairs(Character:GetChildren()) do
-        if tool:IsA("Tool") and string.find(tool.Name, "Pan") then
-            return tool.Name
-        end
-    end
-    return nil
-end
-
+-- UTILS
 local function getEquippedPan()
-    local panName = getEquippedPanName()
-    if panName then
-        return Character:FindFirstChild(panName)
-    end
-    return nil
+	return Character:FindFirstChild("Worldshaker")
 end
 
+-- REMOTE FUNCTIONS
 local function fastCollect(duration)
-    local pan = getEquippedPan()
-    if not (pan and pan.Scripts and pan.Scripts:FindFirstChild("Collect")) then return end
+	local pan = getEquippedPan()
+	if not (pan and pan.Scripts and pan.Scripts:FindFirstChild("Collect")) then return end
+	local collectFunc = pan.Scripts.Collect
+	local startTime = tick()
 
-    local collectFunc = pan.Scripts.Collect
-    local startTime = tick()
-
-    spawn(function()
-        while tick() - startTime < duration do
-            local success1, err1 = pcall(function()
-                collectFunc:InvokeServer()
-            end)
-            local success2, err2 = pcall(function()
-                collectFunc:InvokeServer(1)
-            end)
-            if not success1 then warn("Collect error 1:", err1) end
-            if not success2 then warn("Collect error 2:", err2) end
-
-            task.wait(0)  -- รัวไวที่สุด
-        end
-    end)
+	spawn(function()
+		while tick() - startTime < duration do
+			pcall(function() collectFunc:InvokeServer() end)
+			pcall(function() collectFunc:InvokeServer(1) end)
+			task.wait(0)
+		end
+	end)
 end
 
 local function fastShake(duration)
-    local pan = getEquippedPan()
-    if not (pan and pan.Scripts and pan.Scripts:FindFirstChild("Shake")) then return end
+	local pan = getEquippedPan()
+	if not (pan and pan.Scripts and pan.Scripts:FindFirstChild("Shake")) then return end
+	local shakeFunc = pan.Scripts.Shake
+	local startTime = tick()
 
-    local shakeFunc = pan.Scripts.Shake
-    local startTime = tick()
-
-    spawn(function()
-        while tick() - startTime < duration do
-            local success, err = pcall(function()
-                shakeFunc:FireServer()
-            end)
-            if not success then warn("Shake error:", err) end
-
-            task.wait(0)  -- รัวไวที่สุด
-        end
-    end)
+	spawn(function()
+		while tick() - startTime < duration do
+			pcall(function() shakeFunc:FireServer() end)
+			task.wait(0)
+		end
+	end)
 end
 
--- Events
-
-startBtn.MouseButton1Click:Connect(function()
-    autoFarm4 = not autoFarm4
-    startBtn.Text = "Start: " .. (autoFarm4 and "ON" or "OFF")
-    startBtn.BackgroundColor3 = autoFarm4 and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
-
-    if autoFarm4 then
-        startPosition = HRP.Position
-    else
-        startPosition = nil
-    end
+-- GUI BUTTON CALLBACKS
+createButton("Start", 1, function()
+	startPosition = HRP.Position
+	local part = workspace:FindFirstChild("Dig Here")
+	if part then
+		farmDestination = part.Position
+		autoFarm4 = true
+	end
 end)
 
-digHereBtn.MouseButton1Click:Connect(function()
-    farmDestination = HRP.Position
-    Character:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.Jumping)
+createButton("Stop", 2, function()
+	autoFarm4 = false
 end)
 
-sellBtn.MouseButton1Click:Connect(function()
-    pcall(function()
-        ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Shop"):WaitForChild("SellAll"):InvokeServer()
-    end)
+createButton("Enchant", 3, function()
+	local args = {
+		Instance.new("Tool", nil)
+	}
+	ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Crafting"):WaitForChild("Enchant"):InvokeServer(unpack(args))
 end)
 
-enchantBtn.MouseButton1Click:Connect(function()
-    local args = {
-        Instance.new("Tool", nil)
-    }
-    pcall(function()
-        ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Crafting"):WaitForChild("Enchant"):InvokeServer(unpack(args))
-    end)
-end)
-
-createSlider("Sand", collectSliderPos, collectDuration, function(value)
-    collectDuration = value
-end)
-
-createSlider("Water", shakeSliderPos, shakeDuration, function(value)
-    shakeDuration = value
-end)
-
--- Main AutoFarm Loop
+-- AUTO FARM LOOP
 spawn(function()
-    while true do
-        if autoFarm4 and farmDestination and startPosition and HRP and Character then
-            pcall(function()
-                -- วาร์ปไปจุด Dig Here
-                HRP.CFrame = CFrame.new(farmDestination)
-                wait(0.5)
+	while true do
+		if autoFarm4 and farmDestination and startPosition and HRP and Character then
+			pcall(function()
+				HRP.CFrame = CFrame.new(farmDestination)
+				wait(0.5)
 
-                -- รัว Collect แบบเร็วที่สุด (ไม่บล็อก)
-                fastCollect(collectDuration)
+				fastCollect(collectDuration)
+				task.wait(collectDuration + 0.1)
 
-                -- รอให้ครบเวลาที่กำหนด
-                task.wait(collectDuration + 0.1)
+				HRP.CFrame = CFrame.new(startPosition)
+				wait(0.2)
 
-                -- วาร์ปกลับจุด Start
-                HRP.CFrame = CFrame.new(startPosition)
-                wait(0.2)
-
-                -- รัว Shake แบบเร็วที่สุด (ไม่บล็อก)
-                fastShake(shakeDuration)
-
-                -- รอให้ครบเวลาที่กำหนด
-                task.wait(shakeDuration + 0.1)
-            end)
-        end
-        wait(1)
-    end
+				fastShake(shakeDuration)
+				task.wait(shakeDuration + 0.1)
+			end)
+		end
+		wait(1)
+	end
 end)

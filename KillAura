@@ -14,7 +14,7 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.DisplayOrder = 1000
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ScreenGui.Parent = game:GetService("CoreGui")
+ScreenGui.Parent = game:GetService("CoreGui") or PlayerGui
 
 -- Utility Function
 local function createButton(text, position)
@@ -28,6 +28,7 @@ local function createButton(text, position)
     button.Font = Enum.Font.SourceSans
     button.TextSize = 18
     button.AutoButtonColor = true
+    button.Visible = true
     return button
 end
 

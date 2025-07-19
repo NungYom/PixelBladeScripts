@@ -62,7 +62,24 @@ end
 -- 🪙 Manual Sell Button
 createButton("Sell", UDim2.new(0, 10, 0, 10), function()
     pcall(function()
-        ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Shop"):WaitForChild("SellAll"):InvokeServer()
+        local hrp = Character:WaitForChild("HumanoidRootPart")
+        local originalCFrame = hrp.CFrame
+        hrp.CFrame = CFrame.new(-187, -8, 372)
+
+        local sellSuccess = false
+        for _ = 1, 10 do
+            local success = pcall(function()
+                ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Shop"):WaitForChild("SellAll"):InvokeServer()
+            end)
+            if success then
+                sellSuccess = true
+                break
+            end
+            wait(0.1)
+        end
+
+        wait(0.25)
+        hrp.CFrame = originalCFrame
     end)
 end)
 

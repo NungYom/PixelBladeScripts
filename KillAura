@@ -64,6 +64,8 @@ createButton("Sell", UDim2.new(0, 10, 0, 10), function()
     pcall(function()
         local hrp = Character:WaitForChild("HumanoidRootPart")
         local originalCFrame = hrp.CFrame
+
+        -- Update originalCFrame after selling
         hrp.CFrame = CFrame.new(-187, -8, 372)
 
         local sellSuccess = false
@@ -79,6 +81,10 @@ createButton("Sell", UDim2.new(0, 10, 0, 10), function()
         end
 
         wait(0.25)
+
+        -- Refresh originalCFrame before teleporting back
+        Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+        hrp = Character:WaitForChild("HumanoidRootPart")
         hrp.CFrame = originalCFrame
     end)
 end)
@@ -103,6 +109,13 @@ createButton("Auto Farm4", UDim2.new(0, 10, 0, 170), function(button)
     button.BackgroundColor3 = autoFarm and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(51, 51, 51)
 end)
 
+-- 🌋 Auto Farm Cave
+local autoFarmCave = false
+createButton("Auto Farm Cave", UDim2.new(0, 140, 0, 170), function(button)
+    autoFarmCave = not autoFarmCave
+    button.BackgroundColor3 = autoFarmCave and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(51, 51, 51)
+end)
+
 local function getHeldTool()
     return Character:FindFirstChildOfClass("Tool")
 end
@@ -113,6 +126,39 @@ spawn(function()
             local originalPos = Character:WaitForChild("HumanoidRootPart").CFrame
             pcall(function()
                 Character:WaitForChild("HumanoidRootPart").CFrame = CFrame.new(digPosition)
+            end)
+
+            local start = tick()
+            while tick() - start < sandTime do
+                local tool = getHeldTool()
+                if tool and tool:FindFirstChild("Scripts") and tool.Scripts:FindFirstChild("Collect") then
+                    tool.Scripts.Collect:InvokeServer(1)
+                end
+                task.wait()
+            end
+
+            pcall(function()
+                Character:WaitForChild("HumanoidRootPart").CFrame = originalPos
+            end)
+
+            local tool = getHeldTool()
+            if tool and tool:FindFirstChild("Scripts") then
+                local scriptFolder = tool:WaitForChild("Scripts")
+                if scriptFolder:FindFirstChild("Pan") then
+                    scriptFolder.Pan:InvokeServer()
+                end
+                local startShake = tick()
+                while tick() - startShake < waterTime do
+                    if scriptFolder:FindFirstChild("Shake") then
+                        scriptFolder.Shake:FireServer()
+                    end
+                    task.wait()
+                end
+            end
+        elseif autoFarmCave then
+            local originalPos = Character:WaitForChild("HumanoidRootPart").CFrame
+            pcall(function()
+                Character:WaitForChild("HumanoidRootPart").CFrame = CFrame.new(-247, -41, 620)
             end)
 
             local start = tick()

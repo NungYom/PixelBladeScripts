@@ -2,6 +2,9 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 
+-- Parent for GUI
+local guiParent = gethui and gethui() or game:FindFirstChild("CoreGui") or Players.LocalPlayer:WaitForChild("PlayerGui")
+
 -- GUI Creation Helper
 local function createButton(name, position)
     local button = Instance.new("TextButton")
@@ -10,7 +13,7 @@ local function createButton(name, position)
     button.Text = name
     button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
     button.TextColor3 = Color3.new(1, 1, 1)
-    button.Parent = game.CoreGui
+    button.Parent = guiParent
     return button
 end
 
@@ -19,7 +22,7 @@ local function createSlider(name, position, min, max, default)
     frame.Size = UDim2.new(0, 200, 0, 50)
     frame.Position = position
     frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    frame.Parent = game.CoreGui
+    frame.Parent = guiParent
 
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, 0, 0.4, 0)
@@ -85,10 +88,7 @@ startBtn.MouseButton1Click:Connect(function()
 
     task.spawn(function()
         while true do
-            -- Move to dig point
             character:PivotTo(CFrame.new(target))
-
-            -- Start digging
             scripts.ToggleShovelActive:FireServer(true)
 
             local sandTime = getSand()
@@ -99,12 +99,10 @@ startBtn.MouseButton1Click:Connect(function()
                 task.wait()
             end
 
-            -- Finish digging
             scripts.ToggleShovelActive:FireServer(false)
             scripts.Collect:InvokeServer()
             scripts.Collect:InvokeServer(1)
 
-            -- Return and shake
             character:PivotTo(original)
 
             local endWater = tick() + waterTime
@@ -146,9 +144,7 @@ local function startBoost()
                         scripts:FindFirstChild("Collect"):InvokeServer()
                         scripts:FindFirstChild("Shake"):FireServer()
                         scripts:FindFirstChild("Pan"):InvokeServer()
-
-                        local args = {1}
-                        scripts:FindFirstChild("Collect"):InvokeServer(unpack(args))
+                        scripts:FindFirstChild("Collect"):InvokeServer(1)
                     end
                 end
             end)
@@ -161,7 +157,7 @@ local function stopBoost()
     boostEnabled = false
 end
 
--- ปุ่ม Boost
+-- Boost Button
 local boostBtn = createButton("Boost OFF", UDim2.new(0, 10, 0, 250))
 boostBtn.MouseButton1Click:Connect(function()
     if boostEnabled then

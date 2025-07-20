@@ -1,213 +1,171 @@
--- Services
+--// Core Services
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--- Parent for GUI
-local guiParent = gethui and gethui() or game:FindFirstChild("CoreGui") or Players.LocalPlayer:WaitForChild("PlayerGui")
+--// Player & Character
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local hrp = character:WaitForChild("HumanoidRootPart")
 
--- Main GUI Frame
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "AutoFarmUI"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = guiParent
+--// UI Container
+local gui = Instance.new("ScreenGui")
+gui.Name = "DeltaAutoFarmUI"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.Parent = gethui and gethui() or player:WaitForChild("PlayerGui")
 
-local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 300, 0, 350)
-MainFrame.Position = UDim2.new(0, 10, 0, 10)
-MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-MainFrame.Active = true
-MainFrame.Draggable = true
-MainFrame.Parent = ScreenGui
+--// Draggable Frame
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 260, 0, 320)
+frame.Position = UDim2.new(0, 50, 0.3, 0)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Draggable = true
+frame.Parent = gui
 
--- GUI Creation Helper
-local function createButton(name, position)
-    local button = Instance.new("TextButton")
-    button.Size = UDim2.new(0, 120, 0, 30)
-    button.Position = position
-    button.Text = name
-    button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    button.TextColor3 = Color3.new(1, 1, 1)
-    button.Parent = MainFrame
-    return button
+--// UI Template Function
+local function createButton(name, order, callback)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(1, -20, 0, 30)
+	btn.Position = UDim2.new(0, 10, 0, 10 + (order * 35))
+	btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	btn.TextColor3 = Color3.new(1, 1, 1)
+	btn.Font = Enum.Font.SourceSansBold
+	btn.TextSize = 16
+	btn.Text = name
+	btn.Parent = frame
+	btn.MouseButton1Click:Connect(callback)
+	return btn
 end
 
-local function createInputSlider(name, position, default)
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 200, 0, 50)
-    frame.Position = position
-    frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    frame.Parent = MainFrame
+--// Saved Positions
+local digPoint = nil
+local returnPoint = nil
+local isAutoRunning = false
+local autoSell = false
 
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 0.4, 0)
-    label.Position = UDim2.new(0, 0, 0, 0)
-    label.BackgroundTransparency = 1
-    label.Text = name .. ": " .. default
-    label.TextColor3 = Color3.new(1, 1, 1)
-    label.Parent = frame
+--// Input Fields for Sand & Water
+local sandBox = Instance.new("TextBox")
+sandBox.Size = UDim2.new(1, -20, 0, 30)
+sandBox.Position = UDim2.new(0, 10, 0, 200)
+sandBox.Text = "7"
+sandBox.TextColor3 = Color3.new(1,1,1)
+sandBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+sandBox.Font = Enum.Font.SourceSansBold
+sandBox.TextSize = 16
+sandBox.Parent = frame
 
-    local textbox = Instance.new("TextBox")
-    textbox.Size = UDim2.new(1, 0, 0.6, 0)
-    textbox.Position = UDim2.new(0, 0, 0.4, 0)
-    textbox.Text = tostring(default)
-    textbox.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-    textbox.TextColor3 = Color3.new(1, 1, 1)
-    textbox.ClearTextOnFocus = false
-    textbox.Parent = frame
+local waterBox = sandBox:Clone()
+waterBox.Position = UDim2.new(0, 10, 0, 240)
+waterBox.Text = "10"
+waterBox.Parent = frame
 
-    local value = default
-    textbox.FocusLost:Connect(function()
-        local num = tonumber(textbox.Text)
-        if num then
-            value = num
-            label.Text = name .. ": " .. tostring(value)
-        else
-            textbox.Text = tostring(value)
-        end
-    end)
-
-    return function()
-        return value
-    end
+--// Functions
+local function teleportTo(cf)
+	hrpsafe = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	if hrpsafe then hrpsafe.CFrame = cf end
 end
 
--- GUI Controls
-local digHereBtn = createButton("Dig Here", UDim2.new(0, 10, 0, 10))
-local startBtn = createButton("Start", UDim2.new(0, 10, 0, 50))
-local sellBtn = createButton("Sell", UDim2.new(0, 10, 0, 90))
-local enchantBtn = createButton("Enchant", UDim2.new(0, 10, 0, 130))
-local boostBtn = createButton("Boost OFF", UDim2.new(0, 10, 0, 170))
-local autoSellBtn = createButton("Auto Sell OFF", UDim2.new(0, 10, 0, 210))
-
-local getSand = createInputSlider("Sand", UDim2.new(0, 150, 0, 10), 7)
-local getWater = createInputSlider("Water", UDim2.new(0, 150, 0, 70), 10)
-
--- Digging Position Storage
-local savedPosition = nil
-digHereBtn.MouseButton1Click:Connect(function()
-    local character = Players.LocalPlayer.Character
-    if character then
-        local hrp = character:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            savedPosition = hrp.CFrame
-        end
-    end
-end)
-
--- Flags
-local boostEnabled = false
-local autoSellEnabled = false
-
--- AutoFarm Logic
-startBtn.MouseButton1Click:Connect(function()
-    if not savedPosition then return end
-
-    local character = Players.LocalPlayer.Character
-    if not character then return end
-
-    local scripts = character:WaitForChild("Worldshaker"):WaitForChild("Scripts")
-    local digPoint = workspace:FindFirstChild("Dig Here")
-    if not digPoint then return end
-
-    local original = savedPosition
-    local target = digPoint.Position + Vector3.new(0, 5, 0)
-
-    task.spawn(function()
-        while true do
-            character = Players.LocalPlayer.Character
-            if not character or not character:FindFirstChild("HumanoidRootPart") then break end
-            if not workspace:FindFirstChild("Dig Here") then break end
-            if character:FindFirstChildOfClass("Humanoid").Health <= 0 then break end
-
-            character:PivotTo(CFrame.new(target))
-            scripts.ToggleShovelActive:FireServer(true)
-
-            local sandTime = getSand()
-            local waterTime = getWater()
-            local endSand = tick() + sandTime
-
-            while tick() < endSand do task.wait() end
-
-            scripts.ToggleShovelActive:FireServer(false)
-            scripts.Collect:InvokeServer()
-            scripts.Collect:InvokeServer(1)
-
-            if autoSellEnabled then
-                scripts.Sell:FireServer()
-            end
-
-            character:PivotTo(original)
-
-            local endWater = tick() + waterTime
-            while tick() < endWater do
-                scripts.Shake:FireServer()
-                task.wait()
-            end
-        end
-    end)
-end)
-
--- Sell Button
-sellBtn.MouseButton1Click:Connect(function()
-    local sell = Players.LocalPlayer.Character:FindFirstChild("Worldshaker"):FindFirstChild("Scripts"):FindFirstChild("Sell")
-    if sell then sell:FireServer() end
-end)
-
-autoSellBtn.MouseButton1Click:Connect(function()
-    autoSellEnabled = not autoSellEnabled
-    autoSellBtn.Text = autoSellEnabled and "Auto Sell ON" or "Auto Sell OFF"
-end)
-
--- Enchant Button
-enchantBtn.MouseButton1Click:Connect(function()
-    local args = { Instance.new("Tool", nil) }
-    ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Crafting"):WaitForChild("Enchant"):InvokeServer(unpack(args))
-end)
-
--- Boost Toggle
-local function startBoost()
-    boostEnabled = true
-    task.spawn(function()
-        while boostEnabled do
-            pcall(function()
-                local character = Players.LocalPlayer.Character
-                local worldshaker = character and character:FindFirstChild("Worldshaker")
-                if worldshaker then
-                    local scripts = worldshaker:FindFirstChild("Scripts")
-                    if scripts then
-                        scripts:FindFirstChild("Collect"):InvokeServer()
-                        scripts:FindFirstChild("Shake"):FireServer()
-                        scripts:FindFirstChild("Pan"):InvokeServer()
-                        scripts:FindFirstChild("Collect"):InvokeServer(1)
-                    end
-                end
-            end)
-            task.wait()
-        end
-    end)
+local function isPanFull()
+	local pan = player.PlayerGui:FindFirstChild("MainUI") and player.PlayerGui.MainUI:FindFirstChild("Top")
+	if pan then
+		local fill = pan:FindFirstChild("Fill")
+		return fill and tonumber(fill.Text:match("(%d+)%s*/%s*%d+")) == 150
+	end
+	return false
 end
 
-local function stopBoost()
-    boostEnabled = false
-end
-
-boostBtn.MouseButton1Click:Connect(function()
-    if boostEnabled then
-        stopBoost()
-        boostBtn.Text = "Boost OFF"
-    else
-        startBoost()
-        boostBtn.Text = "Boost ON"
-    end
+--// Buttons
+createButton("Dig Here", 0, function()
+	digPoint = hrp.CFrame
+	character:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.Jumping)
 end)
 
--- GUI Toggle via Keybind
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode == Enum.KeyCode.RightShift then
-        MainFrame.Visible = not MainFrame.Visible
-    end
+local startBtn = createButton("Start OFF", 1, function(btn)
+	isAutoRunning = not isAutoRunning
+	btn.Text = isAutoRunning and "Start ON" or "Start OFF"
+	if isAutoRunning and digPoint then
+		coroutine.wrap(function()
+			returnPoint = hrp.CFrame
+			while isAutoRunning and player.Character and player.Character:FindFirstChild("Humanoid") do
+				teleportTo(digPoint)
+				task.wait(tonumber(sandBox.Text) or 7)
+				teleportTo(returnPoint)
+				task.wait(tonumber(waterBox.Text) or 10)
+			end
+		end)()
+	end
 end)
+
+createButton("Sell", 2, function()
+	ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Shared"):WaitForChild("Sell"):FireServer()
+end)
+
+createButton("Enchant", 3, function()
+	ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Shared"):WaitForChild("Enchant"):FireServer()
+end)
+
+local boostBtn = createButton("Boost ON", 4, function(btn)
+	local boosting = true
+	btn.Text = "Boost OFF"
+	coroutine.wrap(function()
+		while boosting do
+			pcall(function()
+				ReplicatedStorage.Modules.Shared.Shake:FireServer()
+				ReplicatedStorage.Modules.Shared.Pan:InvokeServer()
+				ReplicatedStorage.Modules.Shared.Collect:InvokeServer()
+			end)
+			RunService.Heartbeat:Wait()
+		end
+	end)()
+	btn.MouseButton1Click:Connect(function()
+		boosting = false
+		btn.Text = "Boost ON"
+	end)
+end)
+
+createButton("Auto Sell OFF", 5, function(btn)
+	autoSell = not autoSell
+	btn.Text = autoSell and "Auto Sell ON" or "Auto Sell OFF"
+	if autoSell then
+		coroutine.wrap(function()
+			while autoSell do
+				if isPanFull() then
+					ReplicatedStorage.Modules.Shared.Sell:FireServer()
+				end
+				task.wait(1)
+			end
+		end)()
+	end
+end)
+
+--// AFK/Death Detection
+RunService.Heartbeat:Connect(function()
+	if isAutoRunning and (not player.Character or not player.Character:FindFirstChild("Humanoid") or not digPoint) then
+		isAutoRunning = false
+		startBtn.Text = "Start OFF"
+	end
+end)
+
+--// Resize Toggle
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 20, 0, 20)
+toggleBtn.Position = UDim2.new(1, -25, 0, 5)
+toggleBtn.Text = "⮝"
+toggleBtn.Parent = frame
+
+local minimized = false
+toggleBtn.MouseButton1Click:Connect(function()
+	minimized = not minimized
+	for _, child in ipairs(frame:GetChildren()) do
+		if child:IsA("TextButton") or child:IsA("TextBox") then
+			child.Visible = not minimized
+		end
+	end
+	toggleBtn.Text = minimized and "⮟" or "⮝"
+end)
+
+--// End

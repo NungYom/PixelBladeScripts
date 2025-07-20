@@ -1,20 +1,10 @@
 -- Services
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
--- GUI Root
+-- Parent for GUI
 local guiParent = gethui and gethui() or game:FindFirstChild("CoreGui") or Players.LocalPlayer:WaitForChild("PlayerGui")
-
--- Clear old GUI
-if guiParent:FindFirstChild("AutoFarmUI") then
-    guiParent:FindFirstChild("AutoFarmUI"):Destroy()
-end
-
--- GUI Container
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "AutoFarmUI"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = guiParent
 
 -- GUI Creation Helper
 local function createButton(name, position)
@@ -24,16 +14,16 @@ local function createButton(name, position)
     button.Text = name
     button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
     button.TextColor3 = Color3.new(1, 1, 1)
-    button.Parent = ScreenGui
+    button.Parent = guiParent
     return button
 end
 
-local function createSlider(name, position, min, max, default)
+local function createInputSlider(name, position, default)
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(0, 200, 0, 50)
     frame.Position = position
     frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    frame.Parent = ScreenGui
+    frame.Parent = guiParent
 
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, 0, 0.4, 0)
@@ -43,18 +33,24 @@ local function createSlider(name, position, min, max, default)
     label.TextColor3 = Color3.new(1, 1, 1)
     label.Parent = frame
 
-    local slider = Instance.new("TextButton")
-    slider.Size = UDim2.new(1, 0, 0.6, 0)
-    slider.Position = UDim2.new(0, 0, 0.4, 0)
-    slider.Text = ""
-    slider.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-    slider.Parent = frame
+    local textbox = Instance.new("TextBox")
+    textbox.Size = UDim2.new(1, 0, 0.6, 0)
+    textbox.Position = UDim2.new(0, 0, 0.4, 0)
+    textbox.Text = tostring(default)
+    textbox.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+    textbox.TextColor3 = Color3.new(1, 1, 1)
+    textbox.ClearTextOnFocus = false
+    textbox.Parent = frame
 
     local value = default
-    slider.MouseButton1Click:Connect(function()
-        value = value + 1
-        if value > max then value = min end
-        label.Text = name .. ": " .. value
+    textbox.FocusLost:Connect(function()
+        local num = tonumber(textbox.Text)
+        if num then
+            value = num
+            label.Text = name .. ": " .. tostring(value)
+        else
+            textbox.Text = tostring(value)
+        end
     end)
 
     return function()
@@ -66,11 +62,9 @@ end
 local digHereBtn = createButton("Dig Here", UDim2.new(0, 10, 0, 10))
 local startBtn = createButton("Start", UDim2.new(0, 10, 0, 50))
 local sellBtn = createButton("Sell", UDim2.new(0, 10, 0, 90))
-local enchantBtn = createButton("Enchant", UDim2.new(0, 10, 0, 130))
-local boostBtn = createButton("Boost OFF", UDim2.new(0, 10, 0, 250))
 
-local getSand = createSlider("Sand", UDim2.new(0, 150, 0, 10), 1, 20, 7)
-local getWater = createSlider("Water", UDim2.new(0, 150, 0, 70), 1, 60, 10)
+local getSand = createInputSlider("Sand", UDim2.new(0, 150, 0, 10), 7)
+local getWater = createInputSlider("Water", UDim2.new(0, 150, 0, 70), 10)
 
 -- Digging Position Storage
 local savedPosition = nil
@@ -119,6 +113,7 @@ startBtn.MouseButton1Click:Connect(function()
 
             local endWater = tick() + waterTime
             while tick() < endWater do
+                scripts.Shake:FireServer()
                 task.wait()
             end
         end
@@ -132,14 +127,16 @@ sellBtn.MouseButton1Click:Connect(function()
 end)
 
 -- Enchant Button
+local enchantBtn = createButton("Enchant", UDim2.new(0, 10, 0, 130))
 enchantBtn.MouseButton1Click:Connect(function()
     local args = { Instance.new("Tool", nil) }
     game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Crafting"):WaitForChild("Enchant"):InvokeServer(unpack(args))
 end)
 
--- Boost Toggle
+-- Boost Toggle Variables
 local boostEnabled = false
 
+-- Boost Functions
 local function startBoost()
     boostEnabled = true
     task.spawn(function()
@@ -166,6 +163,8 @@ local function stopBoost()
     boostEnabled = false
 end
 
+-- Boost Button
+local boostBtn = createButton("Boost OFF", UDim2.new(0, 10, 0, 250))
 boostBtn.MouseButton1Click:Connect(function()
     if boostEnabled then
         stopBoost()

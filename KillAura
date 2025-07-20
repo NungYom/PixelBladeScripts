@@ -1,111 +1,147 @@
--- GUI AutoFarm Delta [เวอร์ชันปรับปรุง: Sell ใช้งานได้แน่นอน ห้ามแตะ, Start/Boost แก้สมบูรณ์]
-local plr = game:GetService("Players").LocalPlayer
-local rs = game:GetService("ReplicatedStorage")
-local chr = plr.Character or plr.CharacterAdded:Wait()
-local hrp = chr:WaitForChild("HumanoidRootPart")
-local uis = game:GetService("UserInputService")
-local ts = game:GetService("TweenService")
-local run = game:GetService("RunService")
+-- Delta Auto Farm GUI for Emulator
+-- Features: Draggable GUI, Toggleable Auto Sell, Start (AFK Farm), Boost, Enchant, Sell, Dig Here marker
 
--- ล้าง GUI เดิม
-pcall(function()
-	(gethui and gethui() or plr.PlayerGui):FindFirstChild("AutoFarmUI"):Destroy()
-end)
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
--- ตำแหน่งขุด
-local digPoint = nil
-local digging = false
-local boosting = false
-local autoFarm = false
-local boostConn
+local player = Players.LocalPlayer
+local char = player.Character or player.CharacterAdded:Wait()
+local hrp = char:WaitForChild("HumanoidRootPart")
 
--- GUI
-local gui = Instance.new("ScreenGui", gethui and gethui() or plr.PlayerGui)
-local frame = Instance.new("Frame", gui)
-local uiStroke = Instance.new("UIStroke", frame)
-local layout = Instance.new("UIListLayout", frame)
+-- UI Setup
+local gui = Instance.new("ScreenGui", gethui and gethui() or player:WaitForChild("PlayerGui"))
+gui.Name = "DeltaAutoFarmGUI"
+gui.ResetOnSpawn = false
 
--- ปรับ GUI หลัก
-frame.Name = "AutoFarmUI"
-frame.Size = UDim2.fromOffset(150, 200)
-frame.Position = UDim2.fromOffset(300, 300)
-frame.BackgroundTransparency = 0.3
-frame.BackgroundColor3 = Color3.new(0, 0, 0)
-frame.Active = true
-frame.Draggable = true
-uiStroke.Color = Color3.new(1,1,1)
-layout.Padding = UDim.new(0, 4)
+local main = Instance.new("Frame", gui)
+main.Size = UDim2.new(0, 250, 0, 300)
+main.Position = UDim2.new(0.5, -125, 0.5, -150)
+main.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+main.BorderSizePixel = 0
+main.Active = true
+main.Draggable = true
 
-local function newBtn(text)
-	local b = Instance.new("TextButton")
-	b.Text = text
-	b.Size = UDim2.new(1, -8, 0, 28)
-	b.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
-	b.TextColor3 = Color3.new(1,1,1)
-	b.Font = Enum.Font.GothamBold
-	b.TextSize = 14
-	b.Parent = frame
-	return b
+local title = Instance.new("TextLabel", main)
+title.Size = UDim2.new(1, 0, 0, 30)
+title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+title.Text = "Delta Auto Farm GUI"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.Font = Enum.Font.SourceSansBold
+title.TextSize = 18
+
+local function createButton(text, position, callback)
+	local btn = Instance.new("TextButton", main)
+	btn.Size = UDim2.new(0.9, 0, 0, 30)
+	btn.Position = position
+	btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+	btn.TextColor3 = Color3.new(1, 1, 1)
+	btn.Font = Enum.Font.SourceSans
+	btn.TextSize = 16
+	btn.Text = text
+	btn.MouseButton1Click:Connect(callback)
+	return btn
 end
 
+-- State
+local savedPos = nil
+local autoSell = false
+local boostActive = false
+local startActive = false
+
 -- Dig Here
-local digBtn = newBtn("Dig Here")
-digBtn.MouseButton1Click:Connect(function()
-	digPoint = hrp.Position
-	local h = chr:FindFirstChildOfClass("Humanoid")
-	if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
-end)
-
--- Start
-local startBtn = newBtn("Start: OFF")
-startBtn.MouseButton1Click:Connect(function()
-	if not digPoint then return end
-	autoFarm = not autoFarm
-	startBtn.Text = "Start: "..(autoFarm and "ON" or "OFF")
-end)
-
--- AutoFarm Loop
-run.Heartbeat:Connect(function()
-	if autoFarm and digPoint then
-		local goal = digPoint + Vector3.new(5,0,0)
-		chr:PivotTo(CFrame.new(goal))
-		task.wait(10)
-		chr:PivotTo(CFrame.new(digPoint))
-	end
+createButton("Dig Here", UDim2.new(0.05, 0, 0, 40), function()
+	savedPos = hrp.Position
+	char:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.Jumping)
 end)
 
 -- Sell
-local sellBtn = newBtn("Sell")
-sellBtn.MouseButton1Click:Connect(function()
+createButton("Sell", UDim2.new(0.05, 0, 0, 80), function()
 	pcall(function()
-		rs:WaitForChild("Remotes"):WaitForChild("Shop"):WaitForChild("SellAll"):InvokeServer()
+		ReplicatedStorage.Remotes.Shop.SellAll:InvokeServer()
 	end)
 end)
 
 -- Enchant
-local enchantBtn = newBtn("Enchant")
-enchantBtn.MouseButton1Click:Connect(function()
-	local args = { Instance.new("Tool"), false }
+createButton("Enchant", UDim2.new(0.05, 0, 0, 120), function()
+	local args = { Instance.new("Tool", nil), false }
 	pcall(function()
-		rs:WaitForChild("Remotes"):WaitForChild("Crafting"):WaitForChild("ReforgeEquipment"):InvokeServer(unpack(args))
+		ReplicatedStorage.Remotes.Crafting.ReforgeEquipment:InvokeServer(unpack(args))
 	end)
 end)
 
--- Boost
-local boostBtn = newBtn("Boost: OFF")
-boostBtn.MouseButton1Click:Connect(function()
-	boosting = not boosting
-	boostBtn.Text = "Boost: "..(boosting and "ON" or "OFF")
-	if boostConn then boostConn:Disconnect() end
-	if boosting then
-		boostConn = run.RenderStepped:Connect(function()
+-- Boost Toggle
+local boostBtn = createButton("Boost: OFF", UDim2.new(0.05, 0, 0, 160), function()
+	boostActive = not boostActive
+	boostBtn.Text = "Boost: " .. (boostActive and "ON" or "OFF")
+end)
+
+-- Auto Sell Toggle
+local autoSellBtn = createButton("Auto Sell: OFF", UDim2.new(0.05, 0, 0, 200), function()
+	autoSell = not autoSell
+	autoSellBtn.Text = "Auto Sell: " .. (autoSell and "ON" or "OFF")
+end)
+
+-- Start Button
+local startBtn = createButton("Start: OFF", UDim2.new(0.05, 0, 0, 240), function()
+	if not savedPos then return end
+	startActive = not startActive
+	startBtn.Text = "Start: " .. (startActive and "ON" or "OFF")
+end)
+
+-- Boost Handler
+spawn(function()
+	while true do
+		if boostActive then
 			pcall(function()
-				rs:WaitForChild("Players").LocalPlayer.Character.Worldshaker.Scripts.ToggleShovelActive:FireServer(true)
-				rs:WaitForChild("Players").LocalPlayer.Character.Worldshaker.Scripts.Collect:InvokeServer()
-				rs:WaitForChild("Players").LocalPlayer.Character.Worldshaker.Scripts.Collect:InvokeServer(1)
-				rs:WaitForChild("Players").LocalPlayer.Character.Worldshaker.Scripts.Pan:InvokeServer()
-				rs:WaitForChild("Players").LocalPlayer.Character.Worldshaker.Scripts.ToggleShovelActive:FireServer(false)
+				ReplicatedStorage.Players.LocalPlayer.Character.Worldshaker.Scripts.ToggleShovelActive:FireServer(true)
+				ReplicatedStorage.Players.LocalPlayer.Character.Worldshaker.Scripts.Collect:InvokeServer()
+				ReplicatedStorage.Players.LocalPlayer.Character.Worldshaker.Scripts.Collect:InvokeServer(1)
+				ReplicatedStorage.Players.LocalPlayer.Character.Worldshaker.Scripts.Pan:InvokeServer()
+				ReplicatedStorage.Players.LocalPlayer.Character.Worldshaker.Scripts.ToggleShovelActive:FireServer(false)
 			end)
-		end)
+			wait(0.1)
+		else
+			wait(0.2)
+		end
+	end
+end)
+
+-- Auto Farm
+spawn(function()
+	while true do
+		if startActive and savedPos then
+			if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+				startActive = false
+				startBtn.Text = "Start: OFF"
+				return
+			end
+			-- Teleport to dig position, wait, teleport back
+			pcall(function()
+				hrpp = player.Character:FindFirstChild("HumanoidRootPart")
+				hrpp.CFrame = CFrame.new(savedPos + Vector3.new(5, 0, 0))
+				wait(3)
+				hrpp.CFrame = CFrame.new(savedPos)
+				wait(3)
+			end)
+		else
+			wait(0.2)
+		end
+	end
+end)
+
+-- Auto Sell Loop
+spawn(function()
+	while true do
+		if autoSell then
+			pcall(function()
+				-- Detect full backpack (check stat or UI element if known)
+				-- Placeholder: always trigger
+				ReplicatedStorage.Remotes.Shop.SellAll:InvokeServer()
+			end)
+		end
+		wait(5)
 	end
 end)

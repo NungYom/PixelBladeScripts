@@ -2,8 +2,19 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 
--- Parent for GUI
+-- GUI Root
 local guiParent = gethui and gethui() or game:FindFirstChild("CoreGui") or Players.LocalPlayer:WaitForChild("PlayerGui")
+
+-- Clear old GUI
+if guiParent:FindFirstChild("AutoFarmUI") then
+    guiParent:FindFirstChild("AutoFarmUI"):Destroy()
+end
+
+-- GUI Container
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AutoFarmUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = guiParent
 
 -- GUI Creation Helper
 local function createButton(name, position)
@@ -13,7 +24,7 @@ local function createButton(name, position)
     button.Text = name
     button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
     button.TextColor3 = Color3.new(1, 1, 1)
-    button.Parent = guiParent
+    button.Parent = ScreenGui
     return button
 end
 
@@ -22,7 +33,7 @@ local function createSlider(name, position, min, max, default)
     frame.Size = UDim2.new(0, 200, 0, 50)
     frame.Position = position
     frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    frame.Parent = guiParent
+    frame.Parent = ScreenGui
 
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, 0, 0.4, 0)
@@ -55,6 +66,8 @@ end
 local digHereBtn = createButton("Dig Here", UDim2.new(0, 10, 0, 10))
 local startBtn = createButton("Start", UDim2.new(0, 10, 0, 50))
 local sellBtn = createButton("Sell", UDim2.new(0, 10, 0, 90))
+local enchantBtn = createButton("Enchant", UDim2.new(0, 10, 0, 130))
+local boostBtn = createButton("Boost OFF", UDim2.new(0, 10, 0, 250))
 
 local getSand = createSlider("Sand", UDim2.new(0, 150, 0, 10), 1, 20, 7)
 local getWater = createSlider("Water", UDim2.new(0, 150, 0, 70), 1, 60, 10)
@@ -79,7 +92,6 @@ startBtn.MouseButton1Click:Connect(function()
     if not character then return end
 
     local scripts = character:WaitForChild("Worldshaker"):WaitForChild("Scripts")
-
     local digPoint = workspace:FindFirstChild("Dig Here")
     if not digPoint then return end
 
@@ -107,7 +119,6 @@ startBtn.MouseButton1Click:Connect(function()
 
             local endWater = tick() + waterTime
             while tick() < endWater do
-                scripts.Shake:FireServer()
                 task.wait()
             end
         end
@@ -121,16 +132,14 @@ sellBtn.MouseButton1Click:Connect(function()
 end)
 
 -- Enchant Button
-local enchantBtn = createButton("Enchant", UDim2.new(0, 10, 0, 130))
 enchantBtn.MouseButton1Click:Connect(function()
     local args = { Instance.new("Tool", nil) }
     game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Crafting"):WaitForChild("Enchant"):InvokeServer(unpack(args))
 end)
 
--- Boost Toggle Variables
+-- Boost Toggle
 local boostEnabled = false
 
--- Boost Functions
 local function startBoost()
     boostEnabled = true
     task.spawn(function()
@@ -157,8 +166,6 @@ local function stopBoost()
     boostEnabled = false
 end
 
--- Boost Button
-local boostBtn = createButton("Boost OFF", UDim2.new(0, 10, 0, 250))
 boostBtn.MouseButton1Click:Connect(function()
     if boostEnabled then
         stopBoost()

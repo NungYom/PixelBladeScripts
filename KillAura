@@ -1,171 +1,155 @@
---// Core Services
+loadstring([[
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HRP = Character:WaitForChild("HumanoidRootPart")
 
---// Player & Character
-local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local hrp = character:WaitForChild("HumanoidRootPart")
+-- จุด Dig และ Spawn
+local digPosition = nil
+local returnPosition = nil
+local autoSell = false
+local startOn = false
+local boostOn = false
 
---// UI Container
-local gui = Instance.new("ScreenGui")
-gui.Name = "DeltaAutoFarmUI"
+-- GUI Setup
+local guiParent = gethui and gethui() or game.CoreGui
+pcall(function() guiParent:FindFirstChild("AutoFarmUI"):Destroy() end)
+local gui = Instance.new("ScreenGui", guiParent)
+gui.Name = "AutoFarmUI"
 gui.ResetOnSpawn = false
-gui.IgnoreGuiInset = true
-gui.Parent = gethui and gethui() or player:WaitForChild("PlayerGui")
 
---// Draggable Frame
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 260, 0, 320)
-frame.Position = UDim2.new(0, 50, 0.3, 0)
-frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0, 220, 0, 290)
+frame.Position = UDim2.new(0, 20, 0.4, 0)
+frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 frame.BorderSizePixel = 0
 frame.Active = true
 frame.Draggable = true
-frame.Parent = gui
 
---// UI Template Function
-local function createButton(name, order, callback)
-	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(1, -20, 0, 30)
-	btn.Position = UDim2.new(0, 10, 0, 10 + (order * 35))
-	btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-	btn.TextColor3 = Color3.new(1, 1, 1)
-	btn.Font = Enum.Font.SourceSansBold
-	btn.TextSize = 16
-	btn.Text = name
-	btn.Parent = frame
+local function createButton(text, y, callback)
+	local btn = Instance.new("TextButton", frame)
+	btn.Size = UDim2.new(1, -10, 0, 30)
+	btn.Position = UDim2.new(0, 5, 0, y)
+	btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	btn.TextColor3 = Color3.new(1,1,1)
+	btn.Font = Enum.Font.SourceSans
+	btn.TextSize = 20
+	btn.Text = text
 	btn.MouseButton1Click:Connect(callback)
 	return btn
 end
 
---// Saved Positions
-local digPoint = nil
-local returnPoint = nil
-local isAutoRunning = false
-local autoSell = false
-
---// Input Fields for Sand & Water
-local sandBox = Instance.new("TextBox")
-sandBox.Size = UDim2.new(1, -20, 0, 30)
-sandBox.Position = UDim2.new(0, 10, 0, 200)
-sandBox.Text = "7"
-sandBox.TextColor3 = Color3.new(1,1,1)
-sandBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-sandBox.Font = Enum.Font.SourceSansBold
-sandBox.TextSize = 16
-sandBox.Parent = frame
-
-local waterBox = sandBox:Clone()
-waterBox.Position = UDim2.new(0, 10, 0, 240)
-waterBox.Text = "10"
-waterBox.Parent = frame
-
---// Functions
-local function teleportTo(cf)
-	hrpsafe = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-	if hrpsafe then hrpsafe.CFrame = cf end
-end
-
-local function isPanFull()
-	local pan = player.PlayerGui:FindFirstChild("MainUI") and player.PlayerGui.MainUI:FindFirstChild("Top")
-	if pan then
-		local fill = pan:FindFirstChild("Fill")
-		return fill and tonumber(fill.Text:match("(%d+)%s*/%s*%d+")) == 150
-	end
-	return false
-end
-
---// Buttons
-createButton("Dig Here", 0, function()
-	digPoint = hrp.CFrame
-	character:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.Jumping)
-end)
-
-local startBtn = createButton("Start OFF", 1, function(btn)
-	isAutoRunning = not isAutoRunning
-	btn.Text = isAutoRunning and "Start ON" or "Start OFF"
-	if isAutoRunning and digPoint then
-		coroutine.wrap(function()
-			returnPoint = hrp.CFrame
-			while isAutoRunning and player.Character and player.Character:FindFirstChild("Humanoid") do
-				teleportTo(digPoint)
-				task.wait(tonumber(sandBox.Text) or 7)
-				teleportTo(returnPoint)
-				task.wait(tonumber(waterBox.Text) or 10)
+local statusStart = createButton("Start: OFF", 5, function()
+	if not digPosition then return warn("No dig position set.") end
+	startOn = not startOn
+	statusStart.Text = "Start: " .. (startOn and "ON" or "OFF")
+	if startOn then
+		task.spawn(function()
+			returnPosition = HRP.Position
+			while startOn do
+				HRP.CFrame = CFrame.new(digPosition)
+				task.wait(tonumber(frame:FindFirstChild("SandTime").Text) or 5)
+				HRP.CFrame = CFrame.new(returnPosition)
+				task.wait(tonumber(frame:FindFirstChild("WaterTime").Text) or 5)
 			end
-		end)()
+		end)
 	end
 end)
 
-createButton("Sell", 2, function()
-	ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Shared"):WaitForChild("Sell"):FireServer()
+createButton("Dig Here", 40, function()
+	local pos = HRP.Position
+	if pos then
+		digPosition = pos
+		Character:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.Jumping)
+	end
 end)
 
-createButton("Enchant", 3, function()
-	ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Shared"):WaitForChild("Enchant"):FireServer()
+createButton("Sell", 75, function()
+	ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Shop"):WaitForChild("SellAll"):InvokeServer()
 end)
 
-local boostBtn = createButton("Boost ON", 4, function(btn)
-	local boosting = true
-	btn.Text = "Boost OFF"
-	coroutine.wrap(function()
-		while boosting do
-			pcall(function()
-				ReplicatedStorage.Modules.Shared.Shake:FireServer()
-				ReplicatedStorage.Modules.Shared.Pan:InvokeServer()
-				ReplicatedStorage.Modules.Shared.Collect:InvokeServer()
-			end)
-			RunService.Heartbeat:Wait()
-		end
-	end)()
-	btn.MouseButton1Click:Connect(function()
-		boosting = false
-		btn.Text = "Boost ON"
-	end)
+createButton("Enchant", 110, function()
+	local args = {Instance.new("Tool", nil), false}
+	ReplicatedStorage.Remotes.Crafting.ReforgeEquipment:InvokeServer(unpack(args))
 end)
 
-createButton("Auto Sell OFF", 5, function(btn)
+local boostBtn = createButton("Boost: OFF", 145, function()
+	boostOn = not boostOn
+	boostBtn.Text = "Boost: " .. (boostOn and "ON" or "OFF")
+	if boostOn then
+		task.spawn(function()
+			while boostOn do
+				local char = LocalPlayer.Character
+				local scripts = char and char:FindFirstChild("Worldshaker") and char.Worldshaker:FindFirstChild("Scripts")
+				if scripts then
+					pcall(function()
+						scripts.ToggleShovelActive:FireServer(true)
+						scripts.Collect:InvokeServer()
+						scripts.Collect:InvokeServer(1)
+						scripts.Pan:InvokeServer()
+						scripts.ToggleShovelActive:FireServer(false)
+					end)
+				end
+				task.wait(0.1)
+			end
+		end)
+	end
+end)
+
+local autoSellBtn = createButton("Auto Sell: OFF", 180, function()
 	autoSell = not autoSell
-	btn.Text = autoSell and "Auto Sell ON" or "Auto Sell OFF"
+	autoSellBtn.Text = "Auto Sell: " .. (autoSell and "ON" or "OFF")
 	if autoSell then
-		coroutine.wrap(function()
+		task.spawn(function()
 			while autoSell do
-				if isPanFull() then
-					ReplicatedStorage.Modules.Shared.Sell:FireServer()
+				local panFill = tonumber(LocalPlayer.PlayerGui:FindFirstChild("MainUI")?
+					FindFirstChild("PanFill")?
+					FindFirstChild("Amount")?
+					.Text:match("%d+")) or 0
+				if panFill >= 150 then
+					ReplicatedStorage.Remotes.Shop.SellAll:InvokeServer()
 				end
 				task.wait(1)
 			end
-		end)()
+		end)
 	end
 end)
 
---// AFK/Death Detection
-RunService.Heartbeat:Connect(function()
-	if isAutoRunning and (not player.Character or not player.Character:FindFirstChild("Humanoid") or not digPoint) then
-		isAutoRunning = false
-		startBtn.Text = "Start OFF"
-	end
-end)
+local sandBox = Instance.new("TextBox", frame)
+sandBox.Size = UDim2.new(0.5, -6, 0, 25)
+sandBox.Position = UDim2.new(0, 5, 0, 215)
+sandBox.Name = "SandTime"
+sandBox.Text = "7"
+sandBox.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+sandBox.TextColor3 = Color3.new(1,1,1)
+sandBox.Font = Enum.Font.SourceSans
+sandBox.TextSize = 20
 
---// Resize Toggle
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Size = UDim2.new(0, 20, 0, 20)
-toggleBtn.Position = UDim2.new(1, -25, 0, 5)
-toggleBtn.Text = "⮝"
-toggleBtn.Parent = frame
+local waterBox = Instance.new("TextBox", frame)
+waterBox.Size = UDim2.new(0.5, -6, 0, 25)
+waterBox.Position = UDim2.new(0.5, 1, 0, 215)
+waterBox.Name = "WaterTime"
+waterBox.Text = "10"
+waterBox.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+waterBox.TextColor3 = Color3.new(1,1,1)
+waterBox.Font = Enum.Font.SourceSans
+waterBox.TextSize = 20
 
-local minimized = false
+-- พับ/ขยาย GUI
+local toggleBtn = Instance.new("TextButton", gui)
+toggleBtn.Text = "◀"
+toggleBtn.Size = UDim2.new(0, 30, 0, 30)
+toggleBtn.Position = UDim2.new(0, frame.AbsolutePosition.X + frame.AbsoluteSize.X + 5, 0, frame.AbsolutePosition.Y)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+toggleBtn.TextColor3 = Color3.new(1, 1, 1)
+toggleBtn.Font = Enum.Font.SourceSansBold
+toggleBtn.TextSize = 20
 toggleBtn.MouseButton1Click:Connect(function()
-	minimized = not minimized
-	for _, child in ipairs(frame:GetChildren()) do
-		if child:IsA("TextButton") or child:IsA("TextBox") then
-			child.Visible = not minimized
-		end
-	end
-	toggleBtn.Text = minimized and "⮟" or "⮝"
+	frame.Visible = not frame.Visible
+	toggleBtn.Text = frame.Visible and "◀" or "▶"
 end)
 
---// End
+]])()

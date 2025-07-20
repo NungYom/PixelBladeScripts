@@ -2,20 +2,25 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
--- GUI Parent for Delta
-local guiParent = (gethui and gethui()) or Players.LocalPlayer:WaitForChild("PlayerGui")
+-- Parent for GUI
+local guiParent = gethui and gethui() or game:FindFirstChild("CoreGui") or Players.LocalPlayer:WaitForChild("PlayerGui")
 
--- ล้าง GUI เดิมถ้ามี
-local old = guiParent:FindFirstChild("AutoFarmUI")
-if old then old:Destroy() end
+-- Main GUI Frame
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AutoFarmUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = guiParent
 
--- สร้าง ScreenGui
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "AutoFarmUI"
-screenGui.ResetOnSpawn = false
-screenGui.IgnoreGuiInset = true
-screenGui.Parent = guiParent
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 300, 0, 350)
+MainFrame.Position = UDim2.new(0, 10, 0, 10)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
 
 -- GUI Creation Helper
 local function createButton(name, position)
@@ -25,8 +30,7 @@ local function createButton(name, position)
     button.Text = name
     button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
     button.TextColor3 = Color3.new(1, 1, 1)
-    button.BorderSizePixel = 0
-    button.Parent = screenGui
+    button.Parent = MainFrame
     return button
 end
 
@@ -35,8 +39,7 @@ local function createInputSlider(name, position, default)
     frame.Size = UDim2.new(0, 200, 0, 50)
     frame.Position = position
     frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    frame.BorderSizePixel = 0
-    frame.Parent = screenGui
+    frame.Parent = MainFrame
 
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, 0, 0.4, 0)
@@ -44,8 +47,6 @@ local function createInputSlider(name, position, default)
     label.BackgroundTransparency = 1
     label.Text = name .. ": " .. default
     label.TextColor3 = Color3.new(1, 1, 1)
-    label.Font = Enum.Font.SourceSans
-    label.TextScaled = true
     label.Parent = frame
 
     local textbox = Instance.new("TextBox")
@@ -55,8 +56,6 @@ local function createInputSlider(name, position, default)
     textbox.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
     textbox.TextColor3 = Color3.new(1, 1, 1)
     textbox.ClearTextOnFocus = false
-    textbox.Font = Enum.Font.SourceSans
-    textbox.TextScaled = true
     textbox.Parent = frame
 
     local value = default
@@ -81,6 +80,7 @@ local startBtn = createButton("Start", UDim2.new(0, 10, 0, 50))
 local sellBtn = createButton("Sell", UDim2.new(0, 10, 0, 90))
 local enchantBtn = createButton("Enchant", UDim2.new(0, 10, 0, 130))
 local boostBtn = createButton("Boost OFF", UDim2.new(0, 10, 0, 170))
+local autoSellBtn = createButton("Auto Sell OFF", UDim2.new(0, 10, 0, 210))
 
 local getSand = createInputSlider("Sand", UDim2.new(0, 150, 0, 10), 7)
 local getWater = createInputSlider("Water", UDim2.new(0, 150, 0, 70), 10)
@@ -97,9 +97,14 @@ digHereBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Start AutoFarm
+-- Flags
+local boostEnabled = false
+local autoSellEnabled = false
+
+-- AutoFarm Logic
 startBtn.MouseButton1Click:Connect(function()
     if not savedPosition then return end
+
     local character = Players.LocalPlayer.Character
     if not character then return end
 
@@ -112,17 +117,27 @@ startBtn.MouseButton1Click:Connect(function()
 
     task.spawn(function()
         while true do
+            character = Players.LocalPlayer.Character
+            if not character or not character:FindFirstChild("HumanoidRootPart") then break end
+            if not workspace:FindFirstChild("Dig Here") then break end
+            if character:FindFirstChildOfClass("Humanoid").Health <= 0 then break end
+
             character:PivotTo(CFrame.new(target))
             scripts.ToggleShovelActive:FireServer(true)
 
             local sandTime = getSand()
             local waterTime = getWater()
             local endSand = tick() + sandTime
+
             while tick() < endSand do task.wait() end
 
             scripts.ToggleShovelActive:FireServer(false)
             scripts.Collect:InvokeServer()
             scripts.Collect:InvokeServer(1)
+
+            if autoSellEnabled then
+                scripts.Sell:FireServer()
+            end
 
             character:PivotTo(original)
 
@@ -141,14 +156,18 @@ sellBtn.MouseButton1Click:Connect(function()
     if sell then sell:FireServer() end
 end)
 
+autoSellBtn.MouseButton1Click:Connect(function()
+    autoSellEnabled = not autoSellEnabled
+    autoSellBtn.Text = autoSellEnabled and "Auto Sell ON" or "Auto Sell OFF"
+end)
+
 -- Enchant Button
 enchantBtn.MouseButton1Click:Connect(function()
     local args = { Instance.new("Tool", nil) }
-    game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Crafting"):WaitForChild("Enchant"):InvokeServer(unpack(args))
+    ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Crafting"):WaitForChild("Enchant"):InvokeServer(unpack(args))
 end)
 
 -- Boost Toggle
-local boostEnabled = false
 local function startBoost()
     boostEnabled = true
     task.spawn(function()
@@ -182,5 +201,13 @@ boostBtn.MouseButton1Click:Connect(function()
     else
         startBoost()
         boostBtn.Text = "Boost ON"
+    end
+end)
+
+-- GUI Toggle via Keybind
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.RightShift then
+        MainFrame.Visible = not MainFrame.Visible
     end
 end)

@@ -1,80 +1,111 @@
-local p = game:GetService("Players").LocalPlayer
-local char = p.Character or p.CharacterAdded:Wait()
-local hrp = char:WaitForChild("HumanoidRootPart")
+-- GUI AutoFarm Delta [เวอร์ชันปรับปรุง: Sell ใช้งานได้แน่นอน ห้ามแตะ, Start/Boost แก้สมบูรณ์]
+local plr = game:GetService("Players").LocalPlayer
 local rs = game:GetService("ReplicatedStorage")
+local chr = plr.Character or plr.CharacterAdded:Wait()
+local hrp = chr:WaitForChild("HumanoidRootPart")
+local uis = game:GetService("UserInputService")
+local ts = game:GetService("TweenService")
+local run = game:GetService("RunService")
 
-local gui = Instance.new("ScreenGui", gethui and gethui() or game.CoreGui)
-gui.Name = "AutoFarmUI"
-gui.ResetOnSpawn = false
-
-local frame = Instance.new("Frame", gui)
-frame.Size = UDim2.new(0, 180, 0, 240)
-frame.Position = UDim2.new(0, 20, 0, 200)
-frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-
-local y = 10
-local function addButton(text, callback)
-	local btn = Instance.new("TextButton", frame)
-	btn.Size = UDim2.new(1, -20, 0, 30)
-	btn.Position = UDim2.new(0, 10, 0, y)
-	btn.Text = text
-	btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-	btn.TextColor3 = Color3.new(1,1,1)
-	btn.MouseButton1Click:Connect(callback)
-	y += 35
-	return btn
-end
-
-local digPos = nil
-addButton("Dig Here", function()
-	digPos = hrp.Position
-	wait(0.1)
-	if digPos then char:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.Jumping) end
+-- ล้าง GUI เดิม
+pcall(function()
+	(gethui and gethui() or plr.PlayerGui):FindFirstChild("AutoFarmUI"):Destroy()
 end)
 
-local running = false
-local startBtn = addButton("Start [OFF]", function()
-	if not digPos then return end
-	running = not running
-	startBtn.Text = running and "Start [ON]" or "Start [OFF]"
-	while running and digPos do
-		hrp.CFrame = CFrame.new(digPos + Vector3.new(0, 0, 5))
-		wait(0.8)
-		hrp.CFrame = CFrame.new(digPos)
-		wait(0.8)
+-- ตำแหน่งขุด
+local digPoint = nil
+local digging = false
+local boosting = false
+local autoFarm = false
+local boostConn
+
+-- GUI
+local gui = Instance.new("ScreenGui", gethui and gethui() or plr.PlayerGui)
+local frame = Instance.new("Frame", gui)
+local uiStroke = Instance.new("UIStroke", frame)
+local layout = Instance.new("UIListLayout", frame)
+
+-- ปรับ GUI หลัก
+frame.Name = "AutoFarmUI"
+frame.Size = UDim2.fromOffset(150, 200)
+frame.Position = UDim2.fromOffset(300, 300)
+frame.BackgroundTransparency = 0.3
+frame.BackgroundColor3 = Color3.new(0, 0, 0)
+frame.Active = true
+frame.Draggable = true
+uiStroke.Color = Color3.new(1,1,1)
+layout.Padding = UDim.new(0, 4)
+
+local function newBtn(text)
+	local b = Instance.new("TextButton")
+	b.Text = text
+	b.Size = UDim2.new(1, -8, 0, 28)
+	b.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
+	b.TextColor3 = Color3.new(1,1,1)
+	b.Font = Enum.Font.GothamBold
+	b.TextSize = 14
+	b.Parent = frame
+	return b
+end
+
+-- Dig Here
+local digBtn = newBtn("Dig Here")
+digBtn.MouseButton1Click:Connect(function()
+	digPoint = hrp.Position
+	local h = chr:FindFirstChildOfClass("Humanoid")
+	if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
+end)
+
+-- Start
+local startBtn = newBtn("Start: OFF")
+startBtn.MouseButton1Click:Connect(function()
+	if not digPoint then return end
+	autoFarm = not autoFarm
+	startBtn.Text = "Start: "..(autoFarm and "ON" or "OFF")
+end)
+
+-- AutoFarm Loop
+run.Heartbeat:Connect(function()
+	if autoFarm and digPoint then
+		local goal = digPoint + Vector3.new(5,0,0)
+		chr:PivotTo(CFrame.new(goal))
+		task.wait(10)
+		chr:PivotTo(CFrame.new(digPoint))
 	end
 end)
 
-addButton("Sell", function()
+-- Sell
+local sellBtn = newBtn("Sell")
+sellBtn.MouseButton1Click:Connect(function()
 	pcall(function()
 		rs:WaitForChild("Remotes"):WaitForChild("Shop"):WaitForChild("SellAll"):InvokeServer()
 	end)
 end)
 
-addButton("Enchant", function()
+-- Enchant
+local enchantBtn = newBtn("Enchant")
+enchantBtn.MouseButton1Click:Connect(function()
+	local args = { Instance.new("Tool"), false }
 	pcall(function()
-		local args = {Instance.new("Tool", nil), false}
 		rs:WaitForChild("Remotes"):WaitForChild("Crafting"):WaitForChild("ReforgeEquipment"):InvokeServer(unpack(args))
 	end)
 end)
 
-local boosting = false
-local boostBtn = addButton("Boost [OFF]", function()
+-- Boost
+local boostBtn = newBtn("Boost: OFF")
+boostBtn.MouseButton1Click:Connect(function()
 	boosting = not boosting
-	boostBtn.Text = boosting and "Boost [ON]" or "Boost [OFF]"
-	if not boosting then return end
-
-	task.spawn(function()
-		while boosting do
-			local c = p.Character or p.CharacterAdded:Wait()
-			local path = c:WaitForChild("Worldshaker"):WaitForChild("Scripts")
-			pcall(function() path.ToggleShovelActive:FireServer(true) end)
-			pcall(function() path.Collect:InvokeServer() end)
-			pcall(function() path.Collect:InvokeServer(1) end)
-			pcall(function() path.Pan:InvokeServer() end)
-			wait()
-			pcall(function() path.ToggleShovelActive:FireServer(false) end)
-			wait(2)
-		end
-	end)
+	boostBtn.Text = "Boost: "..(boosting and "ON" or "OFF")
+	if boostConn then boostConn:Disconnect() end
+	if boosting then
+		boostConn = run.RenderStepped:Connect(function()
+			pcall(function()
+				rs:WaitForChild("Players").LocalPlayer.Character.Worldshaker.Scripts.ToggleShovelActive:FireServer(true)
+				rs:WaitForChild("Players").LocalPlayer.Character.Worldshaker.Scripts.Collect:InvokeServer()
+				rs:WaitForChild("Players").LocalPlayer.Character.Worldshaker.Scripts.Collect:InvokeServer(1)
+				rs:WaitForChild("Players").LocalPlayer.Character.Worldshaker.Scripts.Pan:InvokeServer()
+				rs:WaitForChild("Players").LocalPlayer.Character.Worldshaker.Scripts.ToggleShovelActive:FireServer(false)
+			end)
+		end)
+	end
 end)

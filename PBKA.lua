@@ -1,73 +1,63 @@
--- ล้าง GUI เดิม
-local guiParent = gethui and gethui() or game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
-if guiParent:FindFirstChild("IslandUI") then
-	guiParent.IslandUI:Destroy()
+-- โหลด Turtle Lib
+local lib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Bac0nHck/Scripts/refs/heads/main/Turtle-Lib/main/source.lua"))()
+
+-- สร้างหน้าต่างหลัก
+local m = lib:Window("Build An Island")
+local bi = lib:Window("Buy Items")
+local s = lib:Window("Settings")
+
+-- เปิดหน้าต่างทั้งหมดทันที
+if m.Open then m:Open() end
+if bi.Open then bi:Open() end
+if s.Open then s:Open() end
+
+-- ต่อจากนี้คือโค้ดฟังก์ชันหลักเดิม
+local plr = game.Players.LocalPlayer
+local char = plr.Character or plr.CharacterAdded:Wait()
+local rs = game:GetService("ReplicatedStorage")
+local events = rs:WaitForChild("Events")
+
+-- ตำแหน่งเกาะทั้งหมด
+local islands = {}
+for _, v in pairs(workspace:GetDescendants()) do
+	if v:IsA("Model") and v.Name:match("Island") and v:FindFirstChild("Build") then
+		table.insert(islands, v)
+	end
 end
 
--- ===== เก็บเฉพาะฟังก์ชันการทำงานหลัก =====
-local function createIsland()
-    print("Creating Island...")
-    -- (เนื้อหาฟังก์ชันจากต้นฉบับ)
-end
+-- ปุ่มฟาร์ม
+local farming = false
+m:Toggle("Auto Build", function(v)
+	farming = v
+end)
 
-local function buildWalls()
-    print("Building Walls...")
-    -- (เนื้อหาฟังก์ชันจากต้นฉบับ)
-end
+-- ปุ่มซื้อของ
+bi:Button("Buy Wood", function()
+	events.BuyWood:FireServer()
+end)
 
-local function fillGround()
-    print("Filling Ground...")
-    -- (เนื้อหาฟังก์ชันจากต้นฉบับ)
-end
+bi:Button("Buy Stone", function()
+	events.BuyStone:FireServer()
+end)
 
--- ===== สร้าง GUI ใหม่ที่มุมขวาบน =====
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "IslandUI"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.IgnoreGuiInset = true
-ScreenGui.Parent = guiParent
+-- ปุ่มฟาร์มแบบไม่วน
+local once = false
+s:Toggle("One Time Build", function(v)
+	once = v
+end)
 
-local Frame = Instance.new("Frame")
-Frame.Size = UDim2.new(0, 160, 0, 140)
-Frame.Position = UDim2.new(1, -170, 0, 10)
-Frame.BackgroundTransparency = 0.5
-Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-Frame.BorderSizePixel = 0
-Frame.Parent = ScreenGui
-
-local UIListLayout = Instance.new("UIListLayout")
-UIListLayout.Padding = UDim.new(0, 6)
-UIListLayout.FillDirection = Enum.FillDirection.Vertical
-UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-UIListLayout.VerticalAlignment = Enum.VerticalAlignment.Top
-UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-UIListLayout.Parent = Frame
-
-local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, 0, 0, 24)
-Title.Text = "🌴 Build Menu"
-Title.TextColor3 = Color3.new(1,1,1)
-Title.TextTransparency = 0.2
-Title.BackgroundTransparency = 1
-Title.Font = Enum.Font.GothamBold
-Title.TextScaled = true
-Title.Parent = Frame
-
-local function createButton(text, callback)
-	local button = Instance.new("TextButton")
-	button.Size = UDim2.new(1, -20, 0, 26)
-	button.Text = text
-	button.Font = Enum.Font.Gotham
-	button.TextColor3 = Color3.fromRGB(255, 255, 255)
-	button.TextScaled = true
-	button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-	button.BorderSizePixel = 0
-	button.AutoButtonColor = true
-	button.MouseButton1Click:Connect(callback)
-	button.Parent = Frame
-end
-
--- ===== ปุ่มเรียกใช้ฟังก์ชัน =====
-createButton("Create Island", createIsland)
-createButton("Build Walls", buildWalls)
-createButton("Fill Ground", fillGround)
+-- ฟังก์ชันการสร้าง
+game:GetService("RunService").RenderStepped:Connect(function()
+	if farming then
+		for _, island in ipairs(islands) do
+			local build = island:FindFirstChild("Build")
+			if build then
+				events.BuildStructure:FireServer(build)
+				task.wait(0.1)
+			end
+		end
+		if once then
+			farming = false
+		end
+	end
+end)

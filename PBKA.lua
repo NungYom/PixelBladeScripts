@@ -1,89 +1,71 @@
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
-local Players = game:GetService("Players")
-local player = Players.LocalPlayer
-local function getEquippedToolUID()
-	local character = player.Character or player.CharacterAdded:Wait()
-	local tool = character:FindFirstChildOfClass("Tool")
-	if tool then
-		local uidValue = tool:FindFirstChild("UID")
-		if uidValue and typeof(uidValue.Value) == "string" then
-			return uidValue.Value
-		end
-	end
-	return nil
+-- สร้าง GUI หลัก
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Parent = game:GetService("CoreGui")
+
+-- ปุ่ม Attack + Train Toggle
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Size = UDim2.new(0, 150, 0, 50)
+ToggleButton.Position = UDim2.new(0.5, -75, 0, 100) -- กลางบน
+ToggleButton.Text = "Attack+Train: OFF"
+ToggleButton.Parent = ScreenGui
+
+-- ปุ่ม Rebirth Toggle
+local RebirthButton = Instance.new("TextButton")
+RebirthButton.Size = UDim2.new(0, 150, 0, 50)
+RebirthButton.Position = UDim2.new(1, -170, 0.5, -25) -- ขวากลาง
+RebirthButton.Text = "Rebirth: OFF"
+RebirthButton.Parent = ScreenGui
+
+-- ตัวแปรควบคุม loop
+local running = false
+local rebirthRunning = false
+
+-- ฟังก์ชันลูป Attack + Train
+local function attackTrainLoop()
+    while running do
+        pcall(function()
+            game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("_Index")
+                :WaitForChild("sleitnick_knit@1.5.1"):WaitForChild("knit"):WaitForChild("Services")
+                :WaitForChild("FightService"):WaitForChild("RE"):WaitForChild("Attack"):FireServer()
+
+            game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("_Index")
+                :WaitForChild("sleitnick_knit@1.5.1"):WaitForChild("knit"):WaitForChild("Services")
+                :WaitForChild("TrainService"):WaitForChild("RE"):WaitForChild("Train"):FireServer()
+        end)
+        task.wait(0.1)
+    end
 end
-local itemId = 6
-local itemUID = getEquippedToolUID()
-if not itemUID then
-	warn("❌ ไม่พบปืนที่ถืออยู่หรือไม่มี UID")
-	return
+
+-- ฟังก์ชันลูป Rebirth
+local function rebirthLoop()
+    while rebirthRunning do
+        pcall(function()
+            game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("_Index")
+                :WaitForChild("sleitnick_knit@1.5.1"):WaitForChild("knit"):WaitForChild("Services")
+                :WaitForChild("RebirthService"):WaitForChild("RF"):WaitForChild("Rebirth"):InvokeServer()
+        end)
+        task.wait(1)
+    end
 end
-local function fireAllRemote(uuid, fishUUID, direction, origin)
-	local args1 = {
-		"10000",
-		{ ItemId = itemId, UID = itemUID },
-		"1002",
-		uuid,
-		2
-	}
-	ReplicatedStorage.GameplayAbilitySystem.Remote.ServerActivateGameplayEffect:FireServer(unpack(args1))
 
-	local args2 = {
-		"10000",
-		"1",
-		{ ItemId = itemId, UID = itemUID }
-	}
-	ReplicatedStorage.GameplayAbilitySystem.Remote.ClientApplyServerActivateGA:InvokeServer(unpack(args2))
+-- กดปุ่ม Attack+Train
+ToggleButton.MouseButton1Click:Connect(function()
+    running = not running
+    if running then
+        ToggleButton.Text = "Attack+Train: ON"
+        task.spawn(attackTrainLoop)
+    else
+        ToggleButton.Text = "Attack+Train: OFF"
+    end
+end)
 
-	wait(0.05)
-
-	local args3 = {
-		"10000",
-		tostring(itemId),
-		"12",
-		{
-			Direction = direction,
-			ThrowableId = itemId,
-			UUID = uuid,
-			Origin = origin
-		},
-		2,
-		"1002",
-		uuid
-	}
-	ReplicatedStorage.GameplayAbilitySystem.Remote.GameplayEffectExeFinish:FireServer(unpack(args3))
-
-	wait(0.05)
-
-	local args4 = { "10000", "12", "1002", "1" }
-	ReplicatedStorage.GameplayAbilitySystem.Remote.ExeGameplayEffectStartFuncSucc:FireServer(unpack(args4))
-
-	local args5 = { uuid }
-	ReplicatedStorage.Throwable.Remote.GetInstaceByThrowableIndex:InvokeServer(unpack(args5))
-
-	wait(0.2)
-
-	local args6 = {
-		{
-			UUID = uuid,
-			FishList = { fishUUID }
-		}
-	}
-	ReplicatedStorage.Harpoon.Remote.ApplyCaptureResult:InvokeServer(unpack(args6))
-end
-while task.wait(0.5) do
-	pcall(function()
-		for _, fishFolder in pairs(Workspace:WaitForChild("FishModelList"):GetChildren()) do
-			local center = fishFolder:FindFirstChild("Center")
-			if center then
-				local uuid = fishFolder.Name
-				local direction = (center.Position - player.Character.HumanoidRootPart.Position).Unit
-				local origin = player.Character.HumanoidRootPart.Position
-
-				fireAllRemote(uuid, uuid, direction, origin)
-				task.wait(0.2)
-			end
-		end
-	end)
-end
+-- กดปุ่ม Rebirth
+RebirthButton.MouseButton1Click:Connect(function()
+    rebirthRunning = not rebirthRunning
+    if rebirthRunning then
+        RebirthButton.Text = "Rebirth: ON"
+        task.spawn(rebirthLoop)
+    else
+        RebirthButton.Text = "Rebirth: OFF"
+    end
+end)

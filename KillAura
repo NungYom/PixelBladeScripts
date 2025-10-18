@@ -1,68 +1,126 @@
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
 local player = Players.LocalPlayer
+local tweenTime = 2
+local waitTime = 0.5
+
+local currentTween = nil
+local paused = false
+local hrp
+local checkpointsFolder
+
+local function updatePausedState()
+    paused = (#Players:GetPlayers() > 1)
+end
+
+Players.PlayerAdded:Connect(function()
+    updatePausedState()
+    if paused and currentTween then
+        pcall(function() currentTween:Cancel() end)
+    end
+end)
+
+Players.PlayerRemoving:Connect(function()
+    updatePausedState()
+end)
 
 local function waitForCharacter()
     if not player.Character or not player.Character.Parent then
         player.CharacterAdded:Wait()
     end
     local char = player.Character
-    local hrp = char:WaitForChild("HumanoidRootPart")
-    return char, hrp
+    hrp = char:WaitForChild("HumanoidRootPart")
+    char.AncestryChanged:Connect(function()
+        if not char.Parent then
+            task.spawn(function()
+                player.CharacterAdded:Wait()
+                local nc = player.Character
+                hrp = nc:WaitForChild("HumanoidRootPart")
+            end)
+        end
+    end)
 end
 
 local function waitForCheckpoints()
-    local folder
     repeat
-        folder = workspace:FindFirstChild("Checkpoints")
+        checkpointsFolder = workspace:FindFirstChild("Checkpoints")
         task.wait(0.5)
-    until folder
-    return folder
+    until checkpointsFolder
 end
 
-local tweenTime = 2
-local waitTime = 0.5
-
-local function tweenToPosition(hrp, pos)
+local function tweenToPosition(pos)
+    while paused do
+        task.wait(0.25)
+    end
     local tweenInfo = TweenInfo.new(tweenTime, Enum.EasingStyle.Linear)
-    local tween = TweenService:Create(hrp, tweenInfo, {CFrame = CFrame.new(pos)})
-    tween:Play()
-    tween.Completed:Wait()
+    currentTween = TweenService:Create(hrp, tweenInfo, {CFrame = CFrame.new(pos)})
+    currentTween:Play()
+    local completed = false
+    local con
+    con = currentTween.Completed:Connect(function()
+        completed = true
+        con:Disconnect()
+    end)
+    while not completed do
+        if paused and currentTween then
+            pcall(function() currentTween:Cancel() end)
+            break
+        end
+        task.wait(0.05)
+    end
+    currentTween = nil
+    while paused do
+        task.wait(0.25)
+    end
     task.wait(waitTime)
 end
 
-local function tweenToPart(hrp, checkpointsFolder, partName)
-    local part = checkpointsFolder:FindFirstChild(tostring(partName))
-    if part then
-        tweenToPosition(hrp, part.Position + Vector3.new(0, 3, 0))
+local function tweenToPart(partName)
+    local part = checkpointsFolder and checkpointsFolder:FindFirstChild(tostring(partName))
+    if part and hrp then
+        tweenToPosition(part.Position + Vector3.new(0,3,0))
     end
 end
 
+local steps = {
+    function() tweenToPosition(Vector3.new(448,1470,5145)) end,
+    function() tweenToPart(1) end,
+    function() tweenToPosition(Vector3.new(389,1543,5397)) end,
+    function() tweenToPart(2) end,
+    function() tweenToPosition(Vector3.new(370,1600,6270)) end,
+}
+for i = 3, 11 do table.insert(steps, function() tweenToPart(i) end) end
+table.insert(steps, function() tweenToPosition(Vector3.new(217,1915,9782)) end)
+for i = 12, 17 do table.insert(steps, function() tweenToPart(i) end) end
+table.insert(steps, function() tweenToPosition(Vector3.new(-76,2232,11084)) end)
+for i = 18, 30 do table.insert(steps, function() tweenToPart(i) end) end
+table.insert(steps, function() tweenToPosition(Vector3.new(101,2630,12545)) end)
+table.insert(steps, function() tweenToPosition(Vector3.new(-79,2845,13234)) end)
+table.insert(steps, function() tweenToPosition(Vector3.new(-42,2865,13354)) end)
+table.insert(steps, function() tweenToPosition(Vector3.new(41,2875,13611)) end)
+table.insert(steps, function() tweenToPosition(Vector3.new(95,2879,13668)) end)
+table.insert(steps, function()
+    local args = {"reset_request"}
+    ReplicatedStorage:WaitForChild("ResetBasecampEvent"):FireServer(unpack(args))
+end)
+
 task.spawn(function()
-    local character, hrp = waitForCharacter()
-    local checkpointsFolder = waitForCheckpoints()
-
+    updatePausedState()
+    waitForCharacter()
+    waitForCheckpoints()
+    local index = 1
     while true do
-        tweenToPosition(hrp, Vector3.new(448,1470,5145))
-        tweenToPart(hrp, checkpointsFolder, 1)
-        tweenToPosition(hrp, Vector3.new(389,1543,5397))
-        tweenToPart(hrp, checkpointsFolder, 2)
-        tweenToPosition(hrp, Vector3.new(370,1600,6270))
-        for i = 3, 11 do tweenToPart(hrp, checkpointsFolder, i) end
-        tweenToPosition(hrp, Vector3.new(217,1915,9782))
-        for i = 12, 17 do tweenToPart(hrp, checkpointsFolder, i) end
-        tweenToPosition(hrp, Vector3.new(-76,2232,11084))
-        for i = 18, 30 do tweenToPart(hrp, checkpointsFolder, i) end
-        tweenToPosition(hrp, Vector3.new(101,2630,12545))
-        tweenToPosition(hrp, Vector3.new(-79,2845,13234))
-        tweenToPosition(hrp, Vector3.new(-42,2865,13354))
-        tweenToPosition(hrp, Vector3.new(41,2875,13611))
-        tweenToPosition(hrp, Vector3.new(95,2879,13668))
-
-        local args = {"reset_request"}
-        ReplicatedStorage:WaitForChild("ResetBasecampEvent"):FireServer(unpack(args))
-
-        task.wait(2)
+        updatePausedState()
+        while paused do
+            task.wait(0.25)
+        end
+        pcall(steps[index])
+        index = index + 1
+        if index > #steps then
+            index = 1
+            task.wait(2)
+        end
     end
 end)

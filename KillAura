@@ -1,180 +1,68 @@
--- GUI หลักและตัวแปรจำพิกัด
-local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
-local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local LocalPlayer = Players.LocalPlayer
-local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+local player = Players.LocalPlayer
 
-local gui = Instance.new("ScreenGui")
-local frame = Instance.new("Frame")
-local uicorner = Instance.new("UICorner")
-local uilist = Instance.new("UIListLayout")
-local digBtn = Instance.new("TextButton")
-local shakeBtn = Instance.new("TextButton")
-local sellBtn = Instance.new("TextButton")
-local sellHereBtn = Instance.new("TextButton")
-local boostBtn = Instance.new("TextButton")
-local sandBox = Instance.new("TextBox")
-local waterBox = Instance.new("TextBox")
-local coordX = Instance.new("TextBox")
-local coordY = Instance.new("TextBox")
-local coordZ = Instance.new("TextBox")
-
-local A = nil
-local B = nil
-local a, b = 2, 2
-local runningShake = false
-local runningBoost = false
-local C = nil
-
--- ตำแหน่ง GUI
-frame.Position = UDim2.new(1, -170, 0, 10)
-frame.Size = UDim2.new(0, 160, 0, 310)
-frame.BackgroundTransparency = 0.5
-frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-frame.Parent = gui
-frame.Name = "AutoGUI"
-frame.Active = true
-frame.Draggable = true
-
-uicorner.CornerRadius = UDim.new(0, 8)
-uicorner.Parent = frame
-uilist.Parent = frame
-uilist.SortOrder = Enum.SortOrder.LayoutOrder
-uilist.Padding = UDim.new(0, 4)
-
-local function styleButton(btn, text)
-    btn.Size = UDim2.new(1, 0, 0, 28)
-    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    btn.TextColor3 = Color3.new(1,1,1)
-    btn.TextScaled = true
-    btn.Text = text
-    btn.Parent = frame
+local function waitForCharacter()
+    if not player.Character or not player.Character.Parent then
+        player.CharacterAdded:Wait()
+    end
+    local char = player.Character
+    local hrp = char:WaitForChild("HumanoidRootPart")
+    return char, hrp
 end
 
-styleButton(digBtn, "Dig : None")
-styleButton(shakeBtn, "Shake : OFF")
-styleButton(sellBtn, "Sell")
-styleButton(sellHereBtn, "Sell Here")
-styleButton(boostBtn, "Boost : OFF")
-
-sandBox.Size = UDim2.new(1, 0, 0, 24)
-sandBox.PlaceholderText = "Sand (a)"
-sandBox.Text = tostring(a)
-sandBox.Parent = frame
-
-waterBox.Size = UDim2.new(1, 0, 0, 24)
-waterBox.PlaceholderText = "Water (b)"
-waterBox.Text = tostring(b)
-waterBox.Parent = frame
-
-coordX.Size = UDim2.new(1/3, -2, 0, 24)
-coordX.PlaceholderText = "X"
-coordX.Text = ""
-coordX.Parent = frame
-
-coordY.Size = UDim2.new(1/3, -2, 0, 24)
-coordY.PlaceholderText = "Y"
-coordY.Text = ""
-coordY.Parent = frame
-
-coordZ.Size = UDim2.new(1/3, -2, 0, 24)
-coordZ.PlaceholderText = "Z"
-coordZ.Text = ""
-coordZ.Parent = frame
-
--- ใส่ GUI
-gui.Parent = game:GetService("CoreGui")
-
--- ฟังก์ชัน
-local function jump()
-    local humanoid = Character:FindFirstChildWhichIsA("Humanoid")
-    if humanoid then humanoid:ChangeState(Enum.HumanoidStateType.Jumping) end
+local function waitForCheckpoints()
+    local folder
+    repeat
+        folder = workspace:FindFirstChild("Checkpoints")
+        task.wait(0.5)
+    until folder
+    return folder
 end
 
-digBtn.MouseButton1Click:Connect(function()
-    A = HumanoidRootPart.Position
-    if digBtn.Text == "Dig : None" then
-        digBtn.Text = "Dig : Ready"
-    else
-        digBtn.Text = "Dig : Updated"
-        task.delay(1, function()
-            digBtn.Text = "Dig : Ready"
-        end)
+local tweenTime = 2
+local waitTime = 0.5
+
+local function tweenToPosition(hrp, pos)
+    local tweenInfo = TweenInfo.new(tweenTime, Enum.EasingStyle.Linear)
+    local tween = TweenService:Create(hrp, tweenInfo, {CFrame = CFrame.new(pos)})
+    tween:Play()
+    tween.Completed:Wait()
+    task.wait(waitTime)
+end
+
+local function tweenToPart(hrp, checkpointsFolder, partName)
+    local part = checkpointsFolder:FindFirstChild(tostring(partName))
+    if part then
+        tweenToPosition(hrp, part.Position + Vector3.new(0, 3, 0))
     end
-    jump()
-end)
+end
 
-shakeBtn.MouseButton1Click:Connect(function()
-    if not A then return end
-    if runningShake then
-        runningShake = false
-        shakeBtn.Text = "Shake : OFF"
-        return
+task.spawn(function()
+    local character, hrp = waitForCharacter()
+    local checkpointsFolder = waitForCheckpoints()
+
+    while true do
+        tweenToPosition(hrp, Vector3.new(448,1470,5145))
+        tweenToPart(hrp, checkpointsFolder, 1)
+        tweenToPosition(hrp, Vector3.new(389,1543,5397))
+        tweenToPart(hrp, checkpointsFolder, 2)
+        tweenToPosition(hrp, Vector3.new(370,1600,6270))
+        for i = 3, 11 do tweenToPart(hrp, checkpointsFolder, i) end
+        tweenToPosition(hrp, Vector3.new(217,1915,9782))
+        for i = 12, 17 do tweenToPart(hrp, checkpointsFolder, i) end
+        tweenToPosition(hrp, Vector3.new(-76,2232,11084))
+        for i = 18, 30 do tweenToPart(hrp, checkpointsFolder, i) end
+        tweenToPosition(hrp, Vector3.new(101,2630,12545))
+        tweenToPosition(hrp, Vector3.new(-79,2845,13234))
+        tweenToPosition(hrp, Vector3.new(-42,2865,13354))
+        tweenToPosition(hrp, Vector3.new(41,2875,13611))
+        tweenToPosition(hrp, Vector3.new(95,2879,13668))
+
+        local args = {"reset_request"}
+        ReplicatedStorage:WaitForChild("ResetBasecampEvent"):FireServer(unpack(args))
+
+        task.wait(2)
     end
-
-    B = HumanoidRootPart.Position
-    shakeBtn.Text = "Shake : ON"
-    runningShake = true
-
-    task.spawn(function()
-        while runningShake do
-            a = tonumber(sandBox.Text) or a
-            b = tonumber(waterBox.Text) or b
-
-            local function tweenTo(pos)
-                local t = TweenService:Create(HumanoidRootPart, TweenInfo.new(1), {CFrame = CFrame.new(pos)})
-                t:Play()
-                t.Completed:Wait()
-            end
-
-            tweenTo(A)
-            task.wait(a)
-            tweenTo(B)
-            task.wait(b)
-        end
-    end)
-end)
-
-sellBtn.MouseButton1Click:Connect(function()
-    local x = tonumber(coordX.Text)
-    local y = tonumber(coordY.Text)
-    local z = tonumber(coordZ.Text)
-
-    if x and y and z then
-        C = Vector3.new(x, y, z)
-        local t = TweenService:Create(HumanoidRootPart, TweenInfo.new(1), {CFrame = CFrame.new(C)})
-        t:Play()
-        t.Completed:Wait()
-    end
-
-    ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Shop"):WaitForChild("SellAll"):InvokeServer()
-    jump()
-end)
-
-sellHereBtn.MouseButton1Click:Connect(function()
-    C = HumanoidRootPart.Position
-    coordX.Text = tostring(math.floor(C.X))
-    coordY.Text = tostring(math.floor(C.Y))
-    coordZ.Text = tostring(math.floor(C.Z))
-end)
-
-boostBtn.MouseButton1Click:Connect(function()
-    runningBoost = not runningBoost
-    boostBtn.Text = runningBoost and "Boost : ON" or "Boost : OFF"
-    if not runningBoost then return end
-
-    task.spawn(function()
-        while runningBoost do
-            local args = {true}
-            Character:WaitForChild("Worldshaker"):WaitForChild("Scripts"):WaitForChild("ToggleShovelActive"):FireServer(unpack(args))
-            Character:WaitForChild("Worldshaker"):WaitForChild("Scripts"):WaitForChild("Collect"):InvokeServer()
-            Character:WaitForChild("Worldshaker"):WaitForChild("Scripts"):WaitForChild("Collect"):InvokeServer(1)
-            Character:WaitForChild("Worldshaker"):WaitForChild("Scripts"):WaitForChild("Pan"):InvokeServer()
-            Character:WaitForChild("Worldshaker"):WaitForChild("Scripts"):WaitForChild("ToggleShovelActive"):FireServer(false)
-            task.wait()
-        end
-    end)
 end)

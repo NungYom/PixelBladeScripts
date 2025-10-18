@@ -1,6 +1,7 @@
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local player = Players.LocalPlayer
 local tweenTime = 2
@@ -11,20 +12,36 @@ local paused = false
 local hrp
 local checkpointsFolder
 
+-- GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "StatusGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = player:WaitForChild("PlayerGui")
+
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.AnchorPoint = Vector2.new(1,0)
+StatusLabel.Position = UDim2.new(1, -10, 0, 10)
+StatusLabel.Size = UDim2.new(0, 250, 0, 50)
+StatusLabel.BackgroundTransparency = 0.5
+StatusLabel.BackgroundColor3 = Color3.fromRGB(0,0,0)
+StatusLabel.TextColor3 = Color3.fromRGB(255,255,255)
+StatusLabel.Font = Enum.Font.SourceSansBold
+StatusLabel.TextSize = 18
+StatusLabel.Text = "กำลังโหลด..."
+StatusLabel.Parent = ScreenGui
+
 local function updatePausedState()
-    paused = (#Players:GetPlayers() > 1)
+    local others = #Players:GetPlayers() - 1
+    paused = others > 0
+    if paused then
+        StatusLabel.Text = "รอคนอื่นออก: อีก "..others.." คน"
+    else
+        StatusLabel.Text = "กำลังลูป"
+    end
 end
 
-Players.PlayerAdded:Connect(function()
-    updatePausedState()
-    if paused and currentTween then
-        pcall(function() currentTween:Cancel() end)
-    end
-end)
-
-Players.PlayerRemoving:Connect(function()
-    updatePausedState()
-end)
+Players.PlayerAdded:Connect(updatePausedState)
+Players.PlayerRemoving:Connect(updatePausedState)
 
 local function waitForCharacter()
     if not player.Character or not player.Character.Parent then
@@ -124,3 +141,5 @@ task.spawn(function()
         end
     end
 end)
+
+RunService.Heartbeat:Connect(updatePausedState)

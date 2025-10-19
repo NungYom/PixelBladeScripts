@@ -1,114 +1,63 @@
+repeat task.wait() until game:IsLoaded()
+
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer or Players:GetPlayers()[1]
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HRP = Character:WaitForChild("HumanoidRootPart")
+local Checkpoints = workspace:WaitForChild("Checkpoints")
 
-local player = Players.LocalPlayer
 local tweenTime = 2
 local waitTime = 0.5
 
-local currentTween = nil
-local paused = false
-local hrp
-local checkpointsFolder
-
 -- GUI
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "StatusGUI"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = player:WaitForChild("PlayerGui")
+local gui = Instance.new("ScreenGui", game.CoreGui)
+local status = Instance.new("TextLabel", gui)
+status.Size = UDim2.new(0, 300, 0, 40)
+status.Position = UDim2.new(1, -310, 0, 10)
+status.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+status.BackgroundTransparency = 0.3
+status.TextColor3 = Color3.new(1, 1, 1)
+status.TextScaled = true
+status.Text = "กำลังโหลด..."
 
-local StatusLabel = Instance.new("TextLabel")
-StatusLabel.AnchorPoint = Vector2.new(1,0)
-StatusLabel.Position = UDim2.new(1, -10, 0, 10)
-StatusLabel.Size = UDim2.new(0, 250, 0, 50)
-StatusLabel.BackgroundTransparency = 0.5
-StatusLabel.BackgroundColor3 = Color3.fromRGB(0,0,0)
-StatusLabel.TextColor3 = Color3.fromRGB(255,255,255)
-StatusLabel.Font = Enum.Font.SourceSansBold
-StatusLabel.TextSize = 18
-StatusLabel.Text = "กำลังโหลด..."
-StatusLabel.Parent = ScreenGui
-
-local function updatePausedState()
-    local others = #Players:GetPlayers() - 1
-    paused = others > 0
-    if paused then
-        StatusLabel.Text = "รอคนอื่นออก: อีก "..others.." คน"
-    else
-        StatusLabel.Text = "กำลังลูป"
-    end
-end
-
-Players.PlayerAdded:Connect(updatePausedState)
-Players.PlayerRemoving:Connect(updatePausedState)
-
-local function waitForCharacter()
-    if not player.Character or not player.Character.Parent then
-        player.CharacterAdded:Wait()
-    end
-    local char = player.Character
-    hrp = char:WaitForChild("HumanoidRootPart")
-    char.AncestryChanged:Connect(function()
-        if not char.Parent then
-            task.spawn(function()
-                player.CharacterAdded:Wait()
-                local nc = player.Character
-                hrp = nc:WaitForChild("HumanoidRootPart")
-            end)
-        end
-    end)
-end
-
-local function waitForCheckpoints()
-    repeat
-        checkpointsFolder = workspace:FindFirstChild("Checkpoints")
-        task.wait(0.5)
-    until checkpointsFolder
+-- Functions
+local function getOthers()
+	local n = 0
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= LocalPlayer then n += 1 end
+	end
+	return n
 end
 
 local function tweenToPosition(pos)
-    while paused do
-        task.wait(0.25)
-    end
-    local tweenInfo = TweenInfo.new(tweenTime, Enum.EasingStyle.Linear)
-    currentTween = TweenService:Create(hrp, tweenInfo, {CFrame = CFrame.new(pos)})
-    currentTween:Play()
-    local completed = false
-    local con
-    con = currentTween.Completed:Connect(function()
-        completed = true
-        con:Disconnect()
-    end)
-    while not completed do
-        if paused and currentTween then
-            pcall(function() currentTween:Cancel() end)
-            break
-        end
-        task.wait(0.05)
-    end
-    currentTween = nil
-    while paused do
-        task.wait(0.25)
-    end
-    task.wait(waitTime)
+	local tweenInfo = TweenInfo.new(tweenTime, Enum.EasingStyle.Linear)
+	local tween = TweenService:Create(HRP, tweenInfo, {CFrame = CFrame.new(pos)})
+	tween:Play()
+	tween.Completed:Wait()
+	task.wait(waitTime)
 end
 
-local function tweenToPart(partName)
-    local part = checkpointsFolder and checkpointsFolder:FindFirstChild(tostring(partName))
-    if part and hrp then
-        tweenToPosition(part.Position + Vector3.new(0,3,0))
-    end
+local function tweenToPart(name)
+	local part = Checkpoints:FindFirstChild(tostring(name))
+	if part then
+		tweenToPosition(part.Position + Vector3.new(0, 3, 0))
+	end
 end
 
-local steps = {
-    function() tweenToPosition(Vector3.new(448,1470,5145)) end,
-    function() tweenToPart(1) end,
-    function() tweenToPosition(Vector3.new(389,1543,5397)) end,
-    function() tweenToPart(2) end,
-    function() tweenToPosition(Vector3.new(370,1600,6270)) end,
-}
-for i = 3, 11 do table.insert(steps, function() tweenToPart(i) end) end
+-- Steps
+local steps = {}
+
+table.insert(steps, function() tweenToPosition(Vector3.new(448,1470,5145)) end)
+table.insert(steps, function() tweenToPart(1) end)
+table.insert(steps, function() tweenToPosition(Vector3.new(389,1543,5397)) end)
+table.insert(steps, function() tweenToPart(2) end)
+table.insert(steps, function() tweenToPosition(Vector3.new(370,1600,6270)) end)
+
+for i = 3, 4 do table.insert(steps, function() tweenToPart(i) end) end
+table.insert(steps, function() tweenToPosition(Vector3.new(69,1635,7034)) end)
+for i = 5, 11 do table.insert(steps, function() tweenToPart(i) end) end
+
 table.insert(steps, function() tweenToPosition(Vector3.new(217,1915,9782)) end)
 for i = 12, 17 do table.insert(steps, function() tweenToPart(i) end) end
 table.insert(steps, function() tweenToPosition(Vector3.new(-76,2232,11084)) end)
@@ -119,27 +68,27 @@ table.insert(steps, function() tweenToPosition(Vector3.new(-42,2865,13354)) end)
 table.insert(steps, function() tweenToPosition(Vector3.new(41,2875,13611)) end)
 table.insert(steps, function() tweenToPosition(Vector3.new(95,2879,13668)) end)
 table.insert(steps, function()
-    local args = {"reset_request"}
-    ReplicatedStorage:WaitForChild("ResetBasecampEvent"):FireServer(unpack(args))
+	local args = {"reset_request"}
+	game:GetService("ReplicatedStorage"):WaitForChild("ResetBasecampEvent"):FireServer(unpack(args))
 end)
 
-task.spawn(function()
-    updatePausedState()
-    waitForCharacter()
-    waitForCheckpoints()
-    local index = 1
-    while true do
-        updatePausedState()
-        while paused do
-            task.wait(0.25)
-        end
-        pcall(steps[index])
-        index = index + 1
-        if index > #steps then
-            index = 1
-            task.wait(2)
-        end
-    end
-end)
+-- Main loop
+task.wait(3)
+status.Text = "พร้อมทำงาน"
 
-RunService.Heartbeat:Connect(updatePausedState)
+while true do
+	local others = getOthers()
+	if others > 0 then
+		status.Text = "มีผู้เล่นอื่นอีก " .. tostring(others) .. " คน กำลังรอ..."
+		repeat
+			task.wait(1)
+			others = getOthers()
+		until others == 0
+		status.Text = "ไม่มีผู้เล่นอื่น เหลือคุณคนเดียว เริ่มทำงาน"
+	end
+
+	for i, step in ipairs(steps) do
+		status.Text = "กำลังทำขั้นตอนที่ " .. i .. "/" .. #steps
+		step()
+	end
+end

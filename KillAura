@@ -5,7 +5,6 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer or Players:GetPlayers()[1]
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local HRP = Character:WaitForChild("HumanoidRootPart")
-local Checkpoints = workspace:WaitForChild("Checkpoints")
 
 local tweenTime = 2
 local waitTime = 0.5
@@ -38,41 +37,44 @@ local function tweenToPosition(pos)
 	task.wait(waitTime)
 end
 
-local function tweenToPart(name)
-	local part = Checkpoints:FindFirstChild(tostring(name))
-	if part then
-		tweenToPosition(part.Position + Vector3.new(0, 3, 0))
-	end
-end
+local steps = {
+	Vector3.new(377.653076171875, 1536.160888671875, 5386.72607421875),
+	Vector3.new(389.2891540527344, 1543.839111328125, 5397.88818359375),
+	Vector3.new(446.42718505859375, 1559.537841796875, 5712.14111328125),
+	Vector3.new(226.4864501953125, 1616.5703125, 6724.32568359375),
+	Vector3.new(771.3243408203125, 1643.9237060546875, 7002.7529296875),
+	Vector3.new(-138.40521240234375, 1616.1002197265625, 7017.16455078125),
+	Vector3.new(555.075439453125, 1700.70654296875, 7634.2373046875),
+	Vector3.new(404.4833068847656, 1706.716064453125, 7933.44140625),
+	Vector3.new(205.64224243164062, 1715.0716552734375, 7719.341796875),
+	Vector3.new(218.48257446289062, 1714.4659423828125, 7966.07080078125),
+	Vector3.new(33.51085662841797, 1721.896484375, 8338.7978515625),
+	Vector3.new(241.581298828125, 1908.0748291015625, 8966.3583984375),
+	Vector3.new(-221.69859313964844, 1894.725341796875, 10179.828125),
+	Vector3.new(106.474609375, 2024.54833984375, 10367.818359375),
+	Vector3.new(813.2578735351562, 2027.9285888671875, 10614.970703125),
+	Vector3.new(648.7769775390625, 2126.775146484375, 10817.0888671875),
+	Vector3.new(224.78521728515625, 2105.276123046875, 10753.0478515625),
+	Vector3.new(-112.6923828125, 2201.213134765625, 10988.970703125),
+	Vector3.new(-76.19903564453125, 2232.355224609375, 11084.724609375),
+	Vector3.new(-114.47227478027344, 2281.213134765625, 11309.0400390625),
+	Vector3.new(-423.4853515625, 2285.213134765625, 11487.650390625),
+	Vector3.new(-755.4620361328125, 2341.213134765625, 11747.9072265625),
+	Vector3.new(-765.2556762695312, 2489.213134765625, 12179.6376953125),
+	Vector3.new(-237.625, 2489.213134765625, 12111.55078125),
+	Vector3.new(209.26318359375, 2593.213134765625, 11863.8388671875),
+	Vector3.new(826.361328125, 2613.214111328125, 11829.24609375),
+	Vector3.new(1509.7608642578125, 2617.214111328125, 11877.2998046875),
+	Vector3.new(2216.546875, 2637.214111328125, 12313.685546875),
+	Vector3.new(1438.9208984375, 2641.21337890625, 12406),
+	Vector3.new(836.2706298828125, 2625.213134765625, 12165.32421875),
+	Vector3.new(371.0120544433594, 2613.213134765625, 12218.841796875),
+	Vector3.new(118.20372772216797, 2637.213134765625, 12430.6943359375),
+	Vector3.new(101.83103942871094, 2630.920166015625, 12545.7099609375),
+	Vector3.new(-0.09806108474731445, 2900.862060546875, 13386.9541015625),
+	Vector3.new(84.52507019042969, 2900.513916015625, 13655.22265625)
+}
 
--- Steps
-local steps = {}
-
-table.insert(steps, function() tweenToPosition(Vector3.new(448,1470,5145)) end)
-table.insert(steps, function() tweenToPart(1) end)
-table.insert(steps, function() tweenToPosition(Vector3.new(389,1543,5397)) end)
-table.insert(steps, function() tweenToPart(2) end)
-table.insert(steps, function() tweenToPosition(Vector3.new(370,1600,6270)) end)
-
-for i = 3, 4 do table.insert(steps, function() tweenToPart(i) end) end
-table.insert(steps, function() tweenToPosition(Vector3.new(69,1635,7034)) end)
-for i = 5, 11 do table.insert(steps, function() tweenToPart(i) end) end
-
-table.insert(steps, function() tweenToPosition(Vector3.new(217,1915,9782)) end)
-for i = 12, 17 do table.insert(steps, function() tweenToPart(i) end) end
-table.insert(steps, function() tweenToPosition(Vector3.new(-76,2232,11084)) end)
-for i = 18, 30 do table.insert(steps, function() tweenToPart(i) end) end
-table.insert(steps, function() tweenToPosition(Vector3.new(101,2630,12545)) end)
-table.insert(steps, function() tweenToPosition(Vector3.new(-79,2845,13234)) end)
-table.insert(steps, function() tweenToPosition(Vector3.new(-42,2865,13354)) end)
-table.insert(steps, function() tweenToPosition(Vector3.new(41,2875,13611)) end)
-table.insert(steps, function() tweenToPosition(Vector3.new(95,2879,13668)) end)
-table.insert(steps, function()
-	local args = {"reset_request"}
-	game:GetService("ReplicatedStorage"):WaitForChild("ResetBasecampEvent"):FireServer(unpack(args))
-end)
-
--- Main loop
 task.wait(3)
 status.Text = "พร้อมทำงาน"
 
@@ -87,8 +89,11 @@ while true do
 		status.Text = "ไม่มีผู้เล่นอื่น เหลือคุณคนเดียว เริ่มทำงาน"
 	end
 
-	for i, step in ipairs(steps) do
-		status.Text = "กำลังทำขั้นตอนที่ " .. i .. "/" .. #steps
-		step()
+	for i, pos in ipairs(steps) do
+		status.Text = "กำลังไปตำแหน่งที่ " .. i .. "/" .. #steps
+		tweenToPosition(pos)
 	end
+
+	local args = {"reset_request"}
+	game:GetService("ReplicatedStorage"):WaitForChild("ResetBasecampEvent"):FireServer(unpack(args))
 end

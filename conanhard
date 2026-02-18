@@ -2,7 +2,7 @@
 -- INITIAL DELAY & LOAD
 --============================--
 if not game:IsLoaded() then game.Loaded:Wait() end
-task.wait(5) -- รอเกมโหลดเสร็จ 5 วินาที
+task.wait(5) -- รอโหลด 5 วิ
 
 --============================--
 -- SERVICES
@@ -10,6 +10,7 @@ task.wait(5) -- รอเกมโหลดเสร็จ 5 วินาที
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local VirtualInputManager = game:GetService("VirtualInputManager") -- ใช้สำหรับกดปุ่ม
 
 local lp = Players.LocalPlayer
 
@@ -28,6 +29,7 @@ local CaravanRemote = KnitPath:WaitForChild("CaravanService"):WaitForChild("RF")
 --============================--
 local gui = Instance.new("ScreenGui")
 gui.ResetOnSpawn = false
+gui.Name = "SmartFarmGui"
 gui.Parent = lp:WaitForChild("PlayerGui")
 
 local button = Instance.new("TextButton")
@@ -37,27 +39,29 @@ button.TextScaled = true
 button.Parent = gui
 
 --============================--
--- STATE & TIMERS
+-- STATE
 --============================--
-local running = true -- เริ่มต้นเปิดการทำงานทันที
+local running = true -- เริ่มต้น ON
 local floatForce
 local noclipConnection
 local lootTimers = {}
 
 local function updateVisuals()
-    if running then
-        button.Text = "Ranged + Smart Loot : ON"
-        button.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-    else
-        button.Text = "Ranged + Smart Loot : OFF"
-        button.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-    end
+    button.Text = running and "Ranged + Smart Loot : ON" or "Ranged + Smart Loot : OFF"
+    button.BackgroundColor3 = running and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
 end
 updateVisuals()
 
 --============================--
 -- HELPERS
 --============================--
+local function pressKeyOne()
+    -- จำลองการกดปุ่มเลข 1
+    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.One, false, game)
+    task.wait(0.1)
+    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.One, false, game)
+end
+
 local function getTool()
     if lp.Character then
         for _, v in pairs(lp.Character:GetChildren()) do
@@ -105,9 +109,9 @@ local function getClosestTimedSafeLoot()
     local gameFolder = workspace:FindFirstChild("Game")
     local debris = gameFolder and gameFolder:FindFirstChild("Debris")
     if not debris then return end
+    
     local char = lp.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-
     local myPos = char.HumanoidRootPart.Position
     local currentTime = tick()
     local closestLoot, shortestDist = nil, math.huge
@@ -163,52 +167,48 @@ end
 --============================--
 -- INITIALIZATION SEQUENCE
 --============================--
-local char = lp.Character or lp.CharacterAdded:Wait()
-local root = char:WaitForChild("HumanoidRootPart")
-
--- รัน WeaponRangedEquip ก่อนเสมอ (ABC คือตำแหน่งปัจจุบันของผู้เล่น)
-local p = root.Position
-local equipArgs = {
-    vector.create(p.X, p.Y, p.Z),
-    "WeaponRangedEquip"
-}
-AudioRemote:InvokeServer(unpack(equipArgs))
-
--- ตรวจสอบ PlaceId เพื่อทำเงื่อนไขพิเศษ
-if game.PlaceId == 74317689712426 then
-    root.CFrame = CFrame.new(181, 15, -85)
-    task.wait(1)
-    CaravanRemote:InvokeServer()
-    task.wait(5) -- รอ 5 วิหลังรัน StartEarly
-else
-    task.wait(5) -- ถ้าไม่ใช่แมพพิเศษ แค่รอ 5 วิหลังรัน Equip แล้วเริ่มเลย
-end
-
---============================--
--- MAIN LOOP (STARTING)
---============================--
 task.spawn(function()
+    local char = lp.Character or lp.CharacterAdded:Wait()
+    local root = char:WaitForChild("HumanoidRootPart")
+    local currentId = game.PlaceId
+
+    if currentId == 74317689712426 then
+        -- เงื่อนไขสถานที่ที่ 1
+        root.CFrame = CFrame.new(181, 15, -85)
+        task.wait(1)
+        pcall(function() CaravanRemote:InvokeServer() end)
+        task.wait(5)
+    elseif currentId == 91907115368151 then
+        -- เงื่อนไขสถานที่ที่ 2: กดปุ่มเลข 1 แทนการยิง Remote
+        pressKeyOne()
+        task.wait(5)
+    else
+        -- สถานที่อื่นๆ
+        task.wait(5)
+    end
+
+    -- เริ่มระบบฟาร์ม
     if running then toggleSystems(true) end
     
     while true do
         if running then
-            local char = lp.Character
-            local root = char and char:FindFirstChild("HumanoidRootPart")
+            local charNow = lp.Character
+            local rootNow = charNow and charNow:FindFirstChild("HumanoidRootPart")
             
-            if root then
+            if rootNow then
                 local lootMesh = getClosestTimedSafeLoot()
                 if lootMesh then
-                    root.CFrame = lootMesh.CFrame
+                    rootNow.CFrame = lootMesh.CFrame
                     task.wait(0.3)
                 else
                     local tool = getTool()
                     local enemy = getClosestEnemy()
                     if tool and enemy and enemy:FindFirstChild("HumanoidRootPart") then
-                        local myPos = root.Position
+                        local myPos = rootNow.Position
                         local enemyPos = enemy.HumanoidRootPart.Position
                         local fireTime = DateTime.now().UnixTimestampMillis / 1000
                         
-                        root.CFrame = CFrame.new(enemyPos + Vector3.new(0, 30, 0))
+                        rootNow.CFrame = CFrame.new(enemyPos + Vector3.new(0, 30, 0))
                         
                         pcall(function()
                             ProjectileRemote:InvokeServer(vector.create(myPos.X, myPos.Y, myPos.Z), vector.create(enemyPos.X, enemyPos.Y, enemyPos.Z), tool.Name, 0, fireTime)

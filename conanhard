@@ -1,0 +1,240 @@
+--============================--
+-- INITIAL DELAY & LOAD
+--============================--
+if not game:IsLoaded() then game.Loaded:Wait() end
+task.wait(5) -- รอเกมโหลดเสร็จ 5 วินาที
+
+--============================--
+-- SERVICES
+--============================--
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local lp = Players.LocalPlayer
+
+--============================--
+-- REMOTES (KNIT)
+--============================--
+local KnitPath = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_knit@1.4.7"):WaitForChild("knit"):WaitForChild("Services")
+
+local ProjectileRemote = KnitPath:WaitForChild("ProjectileService"):WaitForChild("RF"):WaitForChild("FireToOthers")
+local AudioRemote = KnitPath:WaitForChild("AudioPlaybackService"):WaitForChild("RF"):WaitForChild("PlayFromClient")
+local DamageRemote = KnitPath:WaitForChild("DamageService"):WaitForChild("RF"):WaitForChild("HandleHit")
+local CaravanRemote = KnitPath:WaitForChild("CaravanService"):WaitForChild("RF"):WaitForChild("StartEarly")
+
+--============================--
+-- GUI SETUP
+--============================--
+local gui = Instance.new("ScreenGui")
+gui.ResetOnSpawn = false
+gui.Parent = lp:WaitForChild("PlayerGui")
+
+local button = Instance.new("TextButton")
+button.Size = UDim2.new(0, 260, 0, 55)
+button.Position = UDim2.new(0, 20, 0, 200)
+button.TextScaled = true
+button.Parent = gui
+
+--============================--
+-- STATE & TIMERS
+--============================--
+local running = true -- เริ่มต้นเปิดการทำงานทันที
+local floatForce
+local noclipConnection
+local lootTimers = {}
+
+local function updateVisuals()
+    if running then
+        button.Text = "Ranged + Smart Loot : ON"
+        button.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+    else
+        button.Text = "Ranged + Smart Loot : OFF"
+        button.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+    end
+end
+updateVisuals()
+
+--============================--
+-- HELPERS
+--============================--
+local function getTool()
+    if lp.Character then
+        for _, v in pairs(lp.Character:GetChildren()) do
+            if v:IsA("Tool") then return v end
+        end
+    end
+end
+
+local function getClosestEnemy()
+    local gameFolder = workspace:FindFirstChild("Game")
+    local enemies = gameFolder and gameFolder:FindFirstChild("Enemies")
+    if not enemies then return end
+    
+    local char = lp.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    local myPos = char.HumanoidRootPart.Position
+    local closest, shortest = nil, math.huge
+
+    for _, enemy in pairs(enemies:GetChildren()) do
+        if enemy:FindFirstChild("HumanoidRootPart") and enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 then
+            local dist = (enemy.HumanoidRootPart.Position - myPos).Magnitude
+            if dist < shortest then
+                shortest = dist
+                closest = enemy
+            end
+        end
+    end
+    return closest
+end
+
+local function isAreaSafe(position, radius)
+    local gameFolder = workspace:FindFirstChild("Game")
+    local enemies = gameFolder and gameFolder:FindFirstChild("Enemies")
+    if not enemies then return true end
+    for _, enemy in pairs(enemies:GetChildren()) do
+        local enemyRoot = enemy:FindFirstChild("HumanoidRootPart")
+        if enemyRoot and enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 then
+            if (enemyRoot.Position - position).Magnitude <= radius then return false end
+        end
+    end
+    return true
+end
+
+local function getClosestTimedSafeLoot()
+    local gameFolder = workspace:FindFirstChild("Game")
+    local debris = gameFolder and gameFolder:FindFirstChild("Debris")
+    if not debris then return end
+    local char = lp.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+
+    local myPos = char.HumanoidRootPart.Position
+    local currentTime = tick()
+    local closestLoot, shortestDist = nil, math.huge
+
+    for _, bag in pairs(debris:GetChildren()) do
+        if bag.Name == "Lootbag" then
+            local mesh = bag:FindFirstChild("Meshes/LootsackLP")
+            if mesh and mesh:IsA("BasePart") then
+                if isAreaSafe(mesh.Position, 15) then
+                    if not lootTimers[bag] then lootTimers[bag] = currentTime end
+                    if (currentTime - lootTimers[bag]) >= 5 then
+                        local dist = (mesh.Position - myPos).Magnitude
+                        if dist < shortestDist then
+                            shortestDist = dist
+                            closestLoot = mesh
+                        end
+                    end
+                else
+                    lootTimers[bag] = nil
+                end
+            end
+        end
+    end
+    return closestLoot
+end
+
+local function toggleSystems(state)
+    if state then
+        local char = lp.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            if not floatForce then
+                floatForce = Instance.new("BodyVelocity")
+                floatForce.Velocity = Vector3.zero
+                floatForce.MaxForce = Vector3.new(0, math.huge, 0)
+                floatForce.Parent = char.HumanoidRootPart
+            end
+        end
+        if not noclipConnection then
+            noclipConnection = RunService.Stepped:Connect(function()
+                if lp.Character then
+                    for _, v in pairs(lp.Character:GetDescendants()) do
+                        if v:IsA("BasePart") then v.CanCollide = false end
+                    end
+                end
+            end)
+        end
+    else
+        if floatForce then floatForce:Destroy() floatForce = nil end
+        if noclipConnection then noclipConnection:Disconnect() noclipConnection = nil end
+    end
+end
+
+--============================--
+-- INITIALIZATION SEQUENCE
+--============================--
+local char = lp.Character or lp.CharacterAdded:Wait()
+local root = char:WaitForChild("HumanoidRootPart")
+
+-- รัน WeaponRangedEquip ก่อนเสมอ (ABC คือตำแหน่งปัจจุบันของผู้เล่น)
+local p = root.Position
+local equipArgs = {
+    vector.create(p.X, p.Y, p.Z),
+    "WeaponRangedEquip"
+}
+AudioRemote:InvokeServer(unpack(equipArgs))
+
+-- ตรวจสอบ PlaceId เพื่อทำเงื่อนไขพิเศษ
+if game.PlaceId == 74317689712426 then
+    root.CFrame = CFrame.new(181, 15, -85)
+    task.wait(1)
+    CaravanRemote:InvokeServer()
+    task.wait(5) -- รอ 5 วิหลังรัน StartEarly
+else
+    task.wait(5) -- ถ้าไม่ใช่แมพพิเศษ แค่รอ 5 วิหลังรัน Equip แล้วเริ่มเลย
+end
+
+--============================--
+-- MAIN LOOP (STARTING)
+--============================--
+task.spawn(function()
+    if running then toggleSystems(true) end
+    
+    while true do
+        if running then
+            local char = lp.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            
+            if root then
+                local lootMesh = getClosestTimedSafeLoot()
+                if lootMesh then
+                    root.CFrame = lootMesh.CFrame
+                    task.wait(0.3)
+                else
+                    local tool = getTool()
+                    local enemy = getClosestEnemy()
+                    if tool and enemy and enemy:FindFirstChild("HumanoidRootPart") then
+                        local myPos = root.Position
+                        local enemyPos = enemy.HumanoidRootPart.Position
+                        local fireTime = DateTime.now().UnixTimestampMillis / 1000
+                        
+                        root.CFrame = CFrame.new(enemyPos + Vector3.new(0, 30, 0))
+                        
+                        pcall(function()
+                            ProjectileRemote:InvokeServer(vector.create(myPos.X, myPos.Y, myPos.Z), vector.create(enemyPos.X, enemyPos.Y, enemyPos.Z), tool.Name, 0, fireTime)
+                            AudioRemote:InvokeServer(vector.create(myPos.X, myPos.Y, myPos.Z), "WeaponRangedAttack")
+                            DamageRemote:InvokeServer({
+                                IsEnemyBlocking = false, Type = "PlayerToEnemyRanged", EnemyId = enemy.Name,
+                                WeaponId = tool.Name, FireTime = fireTime, IsHeavy = false,
+                                TargetItem = enemy:FindFirstChild("Humanoid"), WeaponKey = tool:GetAttribute("Key"),
+                                Position = vector.create(myPos.X, myPos.Y, myPos.Z)
+                            }, vector.create(myPos.X, myPos.Y, myPos.Z))
+                            AudioRemote:InvokeServer(vector.create(myPos.X, myPos.Y, myPos.Z), "WeaponRangedReload")
+                        end)
+                    end
+                end
+            end
+        end
+        task.wait(0.1)
+    end
+end)
+
+--============================--
+-- TOGGLE EVENT
+--============================--
+button.MouseButton1Click:Connect(function()
+    running = not running
+    updateVisuals()
+    toggleSystems(running)
+    if not running then table.clear(lootTimers) end
+end)
